@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wasserdynamiken – Sentinel Datacubes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a2a3a; }
+    header { background: linear-gradient(135deg, #1a3a5c, #2e6da4); color: #fff; padding: 20px 32px; }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header p  { font-size: 0.85rem; opacity: 0.8; margin-top: 4px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+    .section-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #2e6da4; margin-bottom: 8px; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .btn-see, .btn-methode, .btn-view {
+      padding: 9px 20px; border: 2px solid #2e6da4; border-radius: 6px; background: #fff;
+      color: #2e6da4; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.18s; }
+    .btn-see:hover, .btn-methode:hover, .btn-view:hover { background: #e8f0fa; }
+    .btn-see.active, .btn-methode.active, .btn-view.active { background: #2e6da4; color: #fff; }
+    .btn-methode[data-m="M1"] { border-color:#2196F3; color:#2196F3; } .btn-methode[data-m="M1"].active { background:#2196F3; color:#fff; }
+    .btn-methode[data-m="M2"] { border-color:#FF9800; color:#FF9800; } .btn-methode[data-m="M2"].active { background:#FF9800; color:#fff; }
+    .btn-methode[data-m="M3"] { border-color:#4CAF50; color:#4CAF50; } .btn-methode[data-m="M3"].active { background:#4CAF50; color:#fff; }
+    .btn-methode[data-m="M4"] { border-color:#9C27B0; color:#9C27B0; } .btn-methode[data-m="M4"].active { background:#9C27B0; color:#fff; }
+    .btn-methode[data-m="M5"] { border-color:#F44336; color:#F44336; } .btn-methode[data-m="M5"].active { background:#F44336; color:#fff; }
+
+    .sticky-nav { position: sticky; top: 0; z-index: 50; background: #f0f4f8; padding: 14px 0 4px; }
+    .sticky-nav.stuck { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.08); overflow: hidden; margin-top: 8px; }
+    .card-head { padding: 14px 18px; font-weight: 700; border-bottom: 1px solid #e8edf2; display: flex; align-items: center; gap: 8px; }
+    .card-body { padding: 18px; }
+
+    .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+    @media (max-width: 800px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .gif-title { padding: 14px 18px; font-size: 1rem; font-weight: 700; border-bottom: 1px solid #e8edf2; display: flex; align-items: center; gap: 10px; }
+    .methode-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; color: #fff; background: #2e6da4; }
+    .frame-date-badge { margin-left: auto; font-size: 0.9rem; font-weight: 600; color: #2e6da4; background: #e8f0fa; padding: 2px 10px; border-radius: 12px; }
+    .gif-wrapper { background: #0a1520; display: flex; align-items: center; justify-content: center; min-height: 380px; padding: 8px; position: relative; }
+    #frame-display { max-width: 100%; max-height: 520px; display: block; border-radius: 4px; }
+    #frame-loading { display: none; position: absolute; color: #5a8aaa; font-size: 0.85rem; }
+    .frame-error { color: #aaa; font-size: 0.85rem; text-align: center; padding: 30px; display: none; }
+
+    .slider-panel { background: #0d1f30; padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .slider-row { display: flex; align-items: center; gap: 8px; }
+    .ctrl-btn { background: #1a3a5c; border: none; color: #fff; width: 30px; height: 30px; border-radius: 5px; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; transition: background 0.15s; }
+    .ctrl-btn:hover { background: #2e6da4; }
+    #play-btn { background: #2e6da4; font-size: 1rem; } #play-btn:hover { background: #1a5a94; }
+    #frame-slider { flex: 1; accent-color: #2e6da4; height: 4px; cursor: pointer; }
+    #frame-date-label { color: #8ab4d4; font-size: 0.82rem; min-width: 64px; text-align: right; font-weight: 600; }
+    .speed-label { color: #5a8aaa; font-size: 0.75rem; white-space: nowrap; }
+    #speed-select { background: #1a3a5c; border: 1px solid #2e6da4; color: #8ab4d4; font-size: 0.78rem; border-radius: 4px; padding: 2px 4px; cursor: pointer; }
+    .slider-progress { display: flex; justify-content: space-between; color: #3a5a7a; font-size: 0.7rem; padding: 0 140px; }
+
+    .info-card { display: flex; flex-direction: column; gap: 0; }
+    .info-section { padding: 16px 18px; border-bottom: 1px solid #e8edf2; }
+    .info-section:last-child { border-bottom: none; }
+    .info-section h3 { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #2e6da4; margin-bottom: 8px; }
+    .info-section p { font-size: 0.88rem; line-height: 1.55; color: #3a4a5a; }
+    .methode-desc, .see-desc { display: none; } .methode-desc.active, .see-desc.active { display: block; }
+
+    .view-panel { display: none; } .view-panel.active { display: block; }
+    .png-box { width: 100%; border-radius: 6px; border: 1px solid #e8edf2; display: block; }
+    .png-fallback { background: #0a1520; color: #5a8aaa; min-height: 260px; border-radius: 6px; display: none; align-items: center; justify-content: center; text-align: center; font-size: .85rem; padding: 20px; }
+    .pfad { font-family: monospace; font-size: .72rem; color: #8a9aaa; margin-top: 8px; word-break: break-all; }
+    .dl-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .dl-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #2e6da4; color: #fff; font-weight: 600; font-size: .9rem; text-decoration: none; transition: background .15s; }
+    .dl-btn:hover { background: #1a5a94; }
+    .dl-btn.sekundaer { background: #fff; color: #2e6da4; border: 2px solid #2e6da4; }
+    .otsu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    .otsu-item { border: 1px solid #e8edf2; border-radius: 8px; overflow: hidden; }
+    .otsu-item img { width: 100%; display: block; }
+    .otsu-cap { padding: 8px 10px; font-size: .8rem; color: #3a4a5a; }
+    .hinweis { color: #8a9aaa; font-size: .85rem; padding: 30px; text-align: center; }
+
+        /* ── ZOOM / LIGHTBOX ── */
+    .zoomable { cursor: zoom-in; }
+    .lb-overlay { position: fixed; inset: 0; background: rgba(6,12,20,.93); z-index: 1000;
+      display: none; align-items: center; justify-content: center; cursor: zoom-out; overflow: hidden; }
+    #lb-img { max-width: 94vw; max-height: 90vh; transform-origin: center center;
+      cursor: grab; user-select: none; -webkit-user-drag: none; }
+    #lb-img.grabbing { cursor: grabbing; }
+    .lb-close { position: fixed; top: 12px; right: 20px; font-size: 2rem; line-height: 1;
+      background: none; border: none; color: #fff; cursor: pointer; z-index: 1001; }
+    .lb-hint { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center;
+      color: #8ab4d4; font-size: .8rem; pointer-events: none; }
+
+    footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #8a9aaa; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Analyse und Visualisierung der Wasserdynamiken mit Sentinel Datacubes</h1>
+  <p>Bachelorarbeit · Alexej Balakin · Sentinel-1 + Sentinel-2 · 2016–2025</p>
+</header>
+
+<div class="container">
+
+  <!-- STEUERUNG (sticky) -->
+  <div class="sticky-nav" id="sticky-nav">
+    <div class="section-label">See auswählen</div>
+    <div class="btn-group" id="see-buttons">
+      <button class="btn-see active" data-see="Forggensee">Forggensee</button>
+      <button class="btn-see" data-see="Dümmer" data-frames="108">Dümmer</button>
+      <button class="btn-see" data-see="Chiemsee">Chiemsee</button>
+      <button class="btn-see" data-see="Groß_Glienicker_See">Groß Glienicker See</button>
+    </div>
+    <div class="section-label">Methode auswählen</div>
+    <div class="btn-group" id="methode-buttons">
+      <button class="btn-methode active" data-m="M1">M1 · S1 Otsu</button>
+      <button class="btn-methode" data-m="M2">M2 · S2 NDWI</button>
+      <button class="btn-methode" data-m="M3">M3 · AND</button>
+      <button class="btn-methode" data-m="M4">M4 · OR</button>
+      <button class="btn-methode" data-m="M5">M5 · Weighted</button>
+    </div>
+  </div>
+
+  <!-- HAUPTBEREICH: Animation + Info -->
+  <div class="main-grid">
+
+    <div class="card">
+      <div class="gif-title">
+        <span id="gif-title-text">Forggensee</span>
+        <span class="methode-badge" id="gif-badge">M1</span>
+        <span class="frame-date-badge" id="title-date">Jan 2016</span>
+      </div>
+      <div class="gif-wrapper">
+        <img id="frame-display" class="zoomable" src="" alt="Monatskarte">
+        <div id="frame-loading">Lade…</div>
+        <div class="frame-error" id="frame-error">
+          Frame nicht gefunden:<br>
+          <span id="frame-errpfad" style="font-size:0.75rem; color:#888;"></span>
+        </div>
+      </div>
+      <div class="slider-panel">
+        <div class="slider-row">
+          <button class="ctrl-btn" id="prev-btn" title="Vorheriger Monat">◀</button>
+          <button class="ctrl-btn" id="play-btn" title="Play / Pause">▶</button>
+          <button class="ctrl-btn" id="next-btn" title="Nächster Monat">▶▌</button>
+          <input type="range" id="frame-slider" min="0" max="119" value="0">
+          <span id="frame-date-label">Jan 2016</span>
+          <span class="speed-label">fps:</span>
+          <select id="speed-select">
+            <option value="1000">1</option>
+            <option value="500">2</option>
+            <option value="200" selected>5</option>
+            <option value="100">10</option>
+            <option value="50">20</option>
+          </select>
+        </div>
+        <div id="preload-row" class="slider-row" style="display:none;">
+          <span class="speed-label">Lade:</span>
+          <div style="flex:1; height:5px; background:#1a3a5c; border-radius:3px; overflow:hidden;">
+            <div id="preload-bar" style="height:100%; background:#2e6da4; width:0%; transition:width 0.08s;"></div>
+          </div>
+          <span id="preload-text" class="speed-label">0 / 120</span>
+        </div>
+        <div class="slider-progress" id="slider-years">
+          <span>2016</span><span>2017</span><span>2018</span><span>2019</span>
+          <span>2020</span><span>2021</span><span>2022</span><span>2023</span>
+          <span>2024</span><span>2025</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card info-card">
+      <div class="info-section">
+        <h3>Methode</h3>
+        <div class="methode-desc active" id="desc-M1"><p><strong>M1 – S1 Otsu (SAR)</strong><br><br>
+          Adaptiver Otsu-Schwellenwert auf Sentinel-1 K0-Backscatter (dB). Wasser hat sehr niedrige
+          Rückstreuung durch Spiegelreflexion. Funktioniert wetterunabhängig, auch bei Wolken und Nacht.</p></div>
+        <div class="methode-desc" id="desc-M2"><p><strong>M2 – S2 NDWI Otsu (Optisch)</strong><br><br>
+          Adaptiver Otsu-Schwellenwert auf Sentinel-2 NDWI (Green−NIR)/(Green+NIR). Sehr präzise bei
+          wolkenfreien Aufnahmen, fällt aber bei Bewölkung aus.</p></div>
+        <div class="methode-desc" id="desc-M3"><p><strong>M3 – AND-Fusion</strong><br><br>
+          Beide Sensoren müssen Wasser zeigen. Konservative Methode mit wenig Falsch-Positiven, aber
+          erhöhter Unterschätzung. Nur gültig wenn beide Sensoren Daten liefern.</p></div>
+        <div class="methode-desc" id="desc-M4"><p><strong>M4 – OR-Fusion</strong><br><br>
+          Mindestens ein Sensor muss Wasser zeigen. Sensitive Methode, erfasst maximale Wasserfläche
+          aber mit erhöhtem Risiko für Falsch-Positive.</p></div>
+        <div class="methode-desc" id="desc-M5"><p><strong>M5 – Weighted Fusion (empfohlen)</strong><br><br>
+          S2 hat Vorrang wenn wolkenfrei (≤50% NaN), sonst S1 als Fallback. Beste Balance aus optischer
+          Präzision und SAR-Zuverlässigkeit.</p></div>
+      </div>
+      <div class="info-section">
+        <h3>See</h3>
+        <div class="see-desc active" id="info-Forggensee"><p><strong>Forggensee</strong> · Bayern<br><br>
+          Künstlicher Stausee im Allgäu (Lechwerke/Uniper). Größter bayerischer Stausee, ~15 km². Wird im
+          Winter für Hochwasserschutz teilweise abgelassen. Pegelmessung: Rosshaupten (GKD Bayern).</p></div>
+        <div class="see-desc" id="info-Dümmer"><p><strong>Dümmer</strong> · Niedersachsen<br><br>
+          Natürlicher Flachsee im Osnabrücker Land, ~13 km². Durchschnittliche Tiefe nur ~1,5 m, stark
+          abhängig von Niederschlag und Verdunstung.</p></div>
+        <div class="see-desc" id="info-Chiemsee"><p><strong>Chiemsee</strong> · Bayern<br><br>
+          Größter bayerischer See, ~80 km². Natürlicher See mit alpinem Einzugsgebiet. Pegelstand
+          beeinflusst durch Schneeschmelze und Alpenabflüsse.</p></div>
+        <div class="see-desc" id="info-Groß_Glienicker_See"><p><strong>Groß Glienicker See</strong> · Berlin/Brandenburg<br><br>
+          Natürlicher Stadtsee an der Berliner Stadtgrenze, ~0,9 km². Seit 2015 rückläufiger Wasserstand
+          dokumentiert. Besonders interessant für Trendanalyse.</p></div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- TABS: Diagramme / Trend / OTSU / Download (alles PNG) -->
+  <div class="section-label" style="margin-top:20px;">Ansicht</div>
+  <div class="btn-group" id="view-tabs">
+    <button class="btn-view active" data-view="diagramme">Diagramme</button>
+    <button class="btn-view" data-view="trend">Trend</button>
+    <button class="btn-view" data-view="otsu">OTSU-Methode</button>
+    <button class="btn-view" data-view="download">Download</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span id="view-titel">Forggensee · M1</span></div>
+    <div class="card-body">
+
+      <!-- DIAGRAMME: Validierungs-PNG -->
+      <div class="view-panel active" id="view-diagramme">
+        <img class="png-box" zoomable id="val-png" alt="Validierungsdiagramm"
+             onerror="this.style.display='none';document.getElementById('val-png-fb').style.display='flex';">
+        <div class="png-fallback" id="val-png-fb">Validierungs-PNG nicht gefunden – bitte
+          <code>validierung_alle_seen.py</code> ausführen (oder Pfad oben im Skript prüfen).</div>
+        <div class="pfad" id="val-png-pfad"></div>
+      </div>
+
+      <!-- TREND: Trend-PNG -->
+      <div class="view-panel" id="view-trend">
+        <img class="png-box" zoomable id="trend-png" alt="Trendanalyse"
+             onerror="this.style.display='none';document.getElementById('trend-fb').style.display='flex';">
+        <div class="png-fallback" id="trend-fb">Trend-PNG noch nicht erzeugt – dafür
+          <code>trend_snippet.py</code> je See/Methode laufen lassen.</div>
+        <div class="pfad" id="trend-pfad"></div>
+      </div>
+
+      <!-- OTSU-METHODE: Bildraster auffälliger Monate -->
+      <div class="view-panel" id="view-otsu">
+        <div class="otsu-grid" id="otsu-grid"></div>
+        <div class="hinweis" id="otsu-leer" style="display:none;">
+          Für diesen See sind noch keine auffälligen Monate hinterlegt (siehe <code>OTSU_IMAGES</code> im Skript).</div>
+      </div>
+
+      <!-- DOWNLOAD -->
+      <div class="view-panel" id="view-download">
+        <div class="dl-row">
+          <a class="dl-btn" id="dl-png" download>⬇ Validierungsdiagramm (PNG)</a>
+          <a class="dl-btn sekundaer" id="dl-csv" download>⬇ Monatsdaten (CSV)</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Zoom-Overlay -->
+<div id="lightbox" class="lb-overlay">
+  <button id="lb-close" class="lb-close" title="Schließen (Esc)">×</button>
+  <img id="lb-img" alt="Vergrößerte Ansicht">
+  <div class="lb-hint">Mausrad: zoomen · ziehen: verschieben · Esc / Klick daneben: schließen</div>
+</div>
+
+<footer>Bachelorarbeit · Alexej Balakin · Sentinel Datacubes · OpenEO · CDSE</footer>
+
+<script>
+  // ══════════════════════════════════════════════════════════════
+  //  PFADE  –  hier an deine Ordnerstruktur anpassen
+  // ══════════════════════════════════════════════════════════════
+  // ROOT wird den See-bezogenen Pfaden vorangestellt. Liegen die See-Ordner
+  // z.B. in einem Unterordner "openEO/", trage "openEO/" ein. Sonst "" lassen.
+  const ROOT = "Daten";
+
+  const M_LABEL = { M1:"M1 S1-Otsu", M2:"M2 S2-NDWI", M3:"M3 AND", M4:"M4 OR", M5:"M5 Weighted" };
+
+  // Animation der Monatskarten (deine bestehende Struktur):
+  function framePfad(see, m, idx) {
+    return `${ROOT}/Frames/${see}_${M_LABEL[m].replace(/ /g,"_")}_${String(idx).padStart(4,"0")}.jpg`;
+  }
+  // Validierungs-PNG:  Daten/Validierung/Validierung_{See}_{Label mit _}.png
+  const valPngPfad   = (see, m) => `${ROOT}/Validierung/Validierung_${see}_${M_LABEL[m].replace(/ /g,"_")}.png`;
+  // Trend-PNG:         Daten/Trend/Trend_{See}_{M}.png
+  const trendPngPfad = (see, m) => `${ROOT}/Trend/Trend_${see}_${M_LABEL[m].replace(/ /g,"_")}.png`;
+  // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
+  const csvPfad      = (see)    => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
+  // OTSU – auffällige Monate je See selbst eintragen:
+  const OTSU_IMAGES  = {
+  "Forggensee": [ { src: "Daten/OTSU/OTSU_Forggensee_NDWI_2025-02", cap: "Aug 2018 · Niedrigstand" } ],
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
+  const MONATSNAMEN = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  const DATES = [];
+  for (let y = 2016; y <= 2025; y++) for (let m = 0; m < 12; m++) DATES.push(`${MONATSNAMEN[m]} ${y}`);
+
+  function frameCount() {
+    const b = document.querySelector(".btn-see.active");
+    return (b && parseInt(b.dataset.frames)) || 120;
+  }
+
+  let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
+
+  // ── Animation ───────────────────────────────────────────────────
+  const preloaded = new Set();
+  function preloadFrames(see, m) {
+    const key = `${see}_${m}`; if (preloaded.has(key)) return;
+    const row = document.getElementById("preload-row");
+    const bar = document.getElementById("preload-bar");
+    const text = document.getElementById("preload-text");
+    const n = frameCount();
+    row.style.display = "flex"; bar.style.width = "0%"; text.textContent = `0 / ${n}`;
+    let loaded = 0;
+    for (let i = 0; i < n; i++) {
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        loaded++; bar.style.width = `${(loaded/n)*100}%`; text.textContent = `${loaded} / ${n}`;
+        if (loaded === n) { preloaded.add(key); row.style.display = "none"; }
+      };
+      img.src = framePfad(see, m, i);
+    }
+  }
+  function setFrame(i) {
+    frameIdx = Math.max(0, Math.min(frameCount() - 1, i));
+    document.getElementById("frame-slider").max = frameCount(aktiverSee) - 1;
+    document.getElementById("frame-slider").value = frameIdx;
+    document.getElementById("frame-date-label").textContent = DATES[frameIdx];
+    document.getElementById("title-date").textContent = DATES[frameIdx];
+    const img = document.getElementById("frame-display");
+    const load = document.getElementById("frame-loading");
+    const err = document.getElementById("frame-error");
+    img.style.display = "none"; err.style.display = "none"; load.style.display = "block";
+    const pfad = framePfad(aktiverSee, aktiveMethode, frameIdx);
+    img.src = pfad;
+    img.onload = () => { load.style.display = "none"; img.style.display = "block"; };
+    img.onerror = () => { load.style.display = "none"; err.style.display = "block";
+      document.getElementById("frame-errpfad").textContent = pfad; };
+  }
+  function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    document.getElementById("play-btn").textContent = "▶"; }
+  function togglePlay() {
+    if (playTimer) { stopPlay(); } else {
+      const ms = parseInt(document.getElementById("speed-select").value);
+      playTimer = setInterval(() => setFrame((frameIdx + 1) % frameCount()), ms);
+      document.getElementById("play-btn").textContent = "⏸";
+    }
+  }
+
+  // ── Tabs (reine PNG-Anzeige) ─────────────────────────────────────
+  function fuelleOtsu(see) {
+    const grid = document.getElementById("otsu-grid");
+    const bilder = OTSU_IMAGES[see] || [];
+    document.getElementById("otsu-leer").style.display = bilder.length ? "none" : "block";
+    grid.innerHTML = bilder.map(b =>
+      `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt=""><div class="otsu-cap">${b.cap||""}</div></div>`).join("");
+  }
+  function setzeBild(imgId, fbId, pfadId, src) {
+    const img = document.getElementById(imgId);
+    document.getElementById(fbId).style.display = "none";
+    img.style.display = "block"; img.src = src;
+    if (pfadId) document.getElementById(pfadId).textContent = src;
+  }
+  function refreshPanels() {
+    document.getElementById("view-titel").textContent = `${SEE_LABEL[aktiverSee]} · ${aktiveMethode}`;
+    setzeBild("val-png",   "val-png-fb", "val-png-pfad", valPngPfad(aktiverSee, aktiveMethode));
+    setzeBild("trend-png", "trend-fb",   "trend-pfad",   trendPngPfad(aktiverSee, aktiveMethode));
+    document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
+    document.getElementById("dl-csv").href = csvPfad(aktiverSee);
+    fuelleOtsu(aktiverSee);
+  }
+  function setView(v) {
+    aktiveView = v;
+    document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+    document.querySelectorAll(".view-panel").forEach(p => p.classList.toggle("active", p.id === `view-${v}`));
+  }
+
+  // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
+  function update() {
+    stopPlay(); frameIdx = 0;
+    document.getElementById("gif-title-text").textContent = SEE_LABEL[aktiverSee];
+    document.getElementById("gif-badge").textContent = aktiveMethode;
+    document.querySelectorAll(".methode-desc").forEach(d => d.classList.remove("active"));
+    document.getElementById(`desc-${aktiveMethode}`).classList.add("active");
+    document.querySelectorAll(".see-desc").forEach(d => d.classList.remove("active"));
+    document.getElementById(`info-${aktiverSee}`).classList.add("active");
+    document.getElementById("frame-slider").max = frameCount(aktiverSee) - 1;
+    const jahre = Math.ceil(frameCount(aktiverSee) / 12);
+    const jahrLeiste = document.getElementById("slider-years")
+                    || document.querySelector(".slider-progress");
+    if (jahrLeiste) {
+      jahrLeiste.innerHTML =
+        Array.from({ length: jahre }, (_, k) => `<span>${2016 + k}</span>`).join("");
+    }
+    setFrame(0);
+    preloadFrames(aktiverSee, aktiveMethode);
+    refreshPanels();
+  }
+
+  // ── Events ───────────────────────────────────────────────────────
+  document.getElementById("play-btn").addEventListener("click", togglePlay);
+  document.getElementById("prev-btn").addEventListener("click", () => { stopPlay(); setFrame(frameIdx - 1); });
+  document.getElementById("next-btn").addEventListener("click", () => { stopPlay(); setFrame(frameIdx + 1); });
+  document.getElementById("frame-slider").addEventListener("input", e => { stopPlay(); setFrame(parseInt(e.target.value)); });
+  document.getElementById("speed-select").addEventListener("change", () => { if (playTimer) { stopPlay(); togglePlay(); } });
+  document.querySelectorAll(".btn-see").forEach(btn => btn.addEventListener("click", () => {
+    document.querySelectorAll(".btn-see").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active"); aktiverSee = btn.dataset.see; update(); aktiveFrameCount = parseInt(btn.dataset.frames) || 120;
+  }));
+  document.querySelectorAll(".btn-methode").forEach(btn => btn.addEventListener("click", () => {
+    document.querySelectorAll(".btn-methode").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active"); aktiveMethode = btn.dataset.m; update();
+  }));
+  document.querySelectorAll(".btn-view").forEach(btn => btn.addEventListener("click", () => setView(btn.dataset.view)));
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft")  { stopPlay(); setFrame(frameIdx - 1); }
+    if (e.key === "ArrowRight") { stopPlay(); setFrame(frameIdx + 1); }
+    if (e.key === " ")          { e.preventDefault(); togglePlay(); }
+  });
+
+  // Schatten unter der Sticky-Nav nur wenn sie klebt
+  const nav = document.getElementById("sticky-nav");
+  const sentinel = document.createElement("div");
+  nav.parentNode.insertBefore(sentinel, nav);
+  new IntersectionObserver(([e]) => nav.classList.toggle("stuck", !e.isIntersecting), { threshold: [1] }).observe(sentinel);
+
+    // ── ZOOM / LIGHTBOX ──────────────────────────────────────────────
+  (function () {
+    const overlay = document.getElementById("lightbox");
+    const lbImg   = document.getElementById("lb-img");
+    let scale = 1, tx = 0, ty = 0, dragging = false, sx = 0, sy = 0;
+
+    const apply = () => { lbImg.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+    function open(src) { lbImg.src = src; reset(); overlay.style.display = "flex"; }
+    function close() { overlay.style.display = "none"; lbImg.src = ""; }
+
+    // Öffnen: Klick auf ein Bild mit Klasse "zoomable"
+    document.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t && t.tagName === "IMG" && t.classList.contains("zoomable")
+          && t.src && t.style.display !== "none") {
+        open(t.src);
+      }
+    });
+
+    // Schließen
+    document.getElementById("lb-close").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay.style.display === "flex") close();
+    });
+
+    // Mausrad = zoomen
+    overlay.addEventListener("wheel", (e) => {
+      if (overlay.style.display !== "flex") return;
+      e.preventDefault();
+      scale = Math.min(8, Math.max(1, scale * (e.deltaY < 0 ? 1.15 : 1/1.15)));
+      if (scale === 1) { tx = 0; ty = 0; }
+      apply();
+    }, { passive: false });
+
+    // Ziehen = verschieben (nur wenn gezoomt)
+    lbImg.addEventListener("mousedown", (e) => {
+      if (scale === 1) return;
+      dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+      lbImg.classList.add("grabbing"); e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return; tx = e.clientX - sx; ty = e.clientY - sy; apply();
+    });
+    window.addEventListener("mouseup", () => { dragging = false; lbImg.classList.remove("grabbing"); });
+
+    // Doppelklick = zwischen Vollbild und 2,5× umschalten
+    lbImg.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      if (scale === 1) { scale = 2.5; } else { scale = 1; tx = 0; ty = 0; }
+      apply();
+    });
+  })();
+
+  // Startwert der Bildanzahl vom anfangs aktiven See-Button übernehmen
+  const startBtn = document.querySelector(".btn-see.active");
+  if (startBtn) aktiveFrameCount = parseInt(startBtn.dataset.frames) || 120;
+
+  update();
+</script>
+</body>
+</html>

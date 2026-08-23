@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wasserdynamiken – Sentinel Datacubes</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      color: #1a2a3a;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a3a5c, #2e6da4);
+      color: white;
+      padding: 20px 32px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header p  { font-size: 0.85rem; opacity: 0.8; margin-top: 4px; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+    /* ── SEE-AUSWAHL ── */
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #2e6da4;
+      margin-bottom: 8px;
+    }
+
+    .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+
+    .btn-see, .btn-methode {
+      padding: 9px 20px;
+      border: 2px solid #2e6da4;
+      border-radius: 6px;
+      background: white;
+      color: #2e6da4;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .btn-see:hover, .btn-methode:hover {
+      background: #e8f0fa;
+    }
+    .btn-see.active, .btn-methode.active {
+      background: #2e6da4;
+      color: white;
+    }
+
+    /* Methodenbuttons in eigenen Farben */
+    .btn-methode[data-m="M1"] { border-color: #2196F3; color: #2196F3; }
+    .btn-methode[data-m="M1"].active { background: #2196F3; color: white; }
+    .btn-methode[data-m="M2"] { border-color: #FF9800; color: #FF9800; }
+    .btn-methode[data-m="M2"].active { background: #FF9800; color: white; }
+    .btn-methode[data-m="M3"] { border-color: #4CAF50; color: #4CAF50; }
+    .btn-methode[data-m="M3"].active { background: #4CAF50; color: white; }
+    .btn-methode[data-m="M4"] { border-color: #9C27B0; color: #9C27B0; }
+    .btn-methode[data-m="M4"].active { background: #9C27B0; color: white; }
+    .btn-methode[data-m="M5"] { border-color: #F44336; color: #F44336; }
+    .btn-methode[data-m="M5"].active { background: #F44336; color: white; }
+
+    /* ── HAUPTBEREICH ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+    }
+    @media (max-width: 800px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    /* ── GIF-ANZEIGE ── */
+    .gif-card { }
+    .gif-title {
+      padding: 14px 18px;
+      font-size: 1rem;
+      font-weight: 700;
+      border-bottom: 1px solid #e8edf2;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .methode-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      color: white;
+      background: #2e6da4;
+    }
+    .gif-wrapper {
+      background: #0a1520;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 380px;
+      padding: 8px;
+    }
+    #gif-display {
+      max-width: 100%;
+      max-height: 520px;
+      display: block;
+      border-radius: 4px;
+    }
+    .gif-error {
+      color: #aaa;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 40px;
+      display: none;
+    }
+
+    /* ── INFO-PANEL ── */
+    .info-card { display: flex; flex-direction: column; gap: 0; }
+
+    .info-section { padding: 16px 18px; border-bottom: 1px solid #e8edf2; }
+    .info-section:last-child { border-bottom: none; }
+    .info-section h3 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #2e6da4;
+      margin-bottom: 8px;
+    }
+    .info-section p {
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: #3a4a5a;
+    }
+
+    /* Methoden-Beschreibung */
+    .methode-desc { display: none; }
+    .methode-desc.active { display: block; }
+
+    /* Kennzahlen */
+    .kennzahlen {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .kz {
+      background: #f0f4f8;
+      border-radius: 7px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .kz-label { font-size: 0.72rem; color: #6a7a8a; font-weight: 600; }
+    .kz-value { font-size: 1.1rem; font-weight: 700; color: #1a3a5c; margin-top: 2px; }
+
+    /* See-Info */
+    .see-desc { display: none; }
+    .see-desc.active { display: block; }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.78rem;
+      color: #8a9aaa;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Analyse und Visualisierung der Wasserdynamiken mit Sentinel Datacubes</h1>
+  <p>Bachelorarbeit · Alexej Balakin · Sentinel-1 + Sentinel-2 · 2016–2025</p>
+</header>
+
+<div class="container">
+
+  <!-- SEE-AUSWAHL -->
+  <div class="section-label">See auswählen</div>
+  <div class="btn-group" id="see-buttons">
+    <button class="btn-see active" data-see="Forggensee">Forggensee</button>
+    <button class="btn-see" data-see="Dümmer">Dümmer</button>
+    <button class="btn-see" data-see="Chiemsee">Chiemsee</button>
+    <button class="btn-see" data-see="Groß_Glienicker_See">Groß Glienicker See</button>
+  </div>
+
+  <!-- METHODEN-AUSWAHL -->
+  <div class="section-label">Methode auswählen</div>
+  <div class="btn-group" id="methode-buttons">
+    <button class="btn-methode active" data-m="M1">M1 · S1 Otsu</button>
+    <button class="btn-methode" data-m="M2">M2 · S2 NDWI</button>
+    <button class="btn-methode" data-m="M3">M3 · AND</button>
+    <button class="btn-methode" data-m="M4">M4 · OR</button>
+    <button class="btn-methode" data-m="M5">M5 · Weighted</button>
+  </div>
+
+  <!-- HAUPTBEREICH -->
+  <div class="main-grid">
+
+    <!-- GIF -->
+    <div class="card gif-card">
+      <div class="gif-title">
+        <span id="gif-title-text">Forggensee</span>
+        <span class="methode-badge" id="gif-badge">M1</span>
+      </div>
+      <div class="gif-wrapper">
+        <img id="gif-display" src="gifs/Forggensee_M1.gif" alt="Animation">
+        <div class="gif-error" id="gif-error">
+          GIF nicht gefunden.<br>Datei: <span id="gif-filename"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- INFO -->
+    <div class="card info-card">
+
+      <!-- Methoden-Beschreibung -->
+      <div class="info-section">
+        <h3>Methode</h3>
+
+        <div class="methode-desc active" id="desc-M1">
+          <p><strong>M1 – S1 Otsu (SAR)</strong><br><br>
+          Adaptiver Otsu-Schwellenwert auf Sentinel-1 K0-Backscatter (dB).
+          Wasser hat sehr niedrige Rückstreuung durch Spiegelreflexion.
+          Funktioniert wetterunabhängig, auch bei Wolken und Nacht.</p>
+        </div>
+        <div class="methode-desc" id="desc-M2">
+          <p><strong>M2 – S2 NDWI Otsu (Optisch)</strong><br><br>
+          Adaptiver Otsu-Schwellenwert auf Sentinel-2 NDWI
+          (Green−NIR)/(Green+NIR). Sehr präzise bei wolkenfreien
+          Aufnahmen, fällt aber bei Bewölkung aus.</p>
+        </div>
+        <div class="methode-desc" id="desc-M3">
+          <p><strong>M3 – AND-Fusion</strong><br><br>
+          Beide Sensoren müssen Wasser zeigen. Konservative Methode
+          mit wenig Falsch-Positiven, aber erhöhter Unterschätzung.
+          Nur gültig wenn beide Sensoren Daten liefern.</p>
+        </div>
+        <div class="methode-desc" id="desc-M4">
+          <p><strong>M4 – OR-Fusion</strong><br><br>
+          Mindestens ein Sensor muss Wasser zeigen. Sensitive Methode,
+          erfasst maximale Wasserfläche aber mit erhöhtem Risiko
+          für Falsch-Positive.</p>
+        </div>
+        <div class="methode-desc" id="desc-M5">
+          <p><strong>M5 – Weighted Fusion (empfohlen)</strong><br><br>
+          S2 hat Vorrang wenn wolkenfrei (≤50% NaN), sonst S1 als
+          Fallback. Beste Balance aus optischer Präzision und
+          SAR-Zuverlässigkeit.</p>
+        </div>
+      </div>
+
+      <!-- See-Beschreibung -->
+      <div class="info-section">
+        <h3>See</h3>
+
+        <div class="see-desc active" id="info-Forggensee">
+          <p><strong>Forggensee</strong> · Bayern<br><br>
+          Künstlicher Stausee im Allgäu (Lechwerke/Uniper).
+          Größter bayerischer Stausee, ~15 km². Wird im Winter
+          für Hochwasserschutz teilweise abgelassen.
+          Pegelmessung: Rosshaupten (GKD Bayern).</p>
+        </div>
+        <div class="see-desc" id="info-Duemmer">
+          <p><strong>Dümmer</strong> · Niedersachsen<br><br>
+          Natürlicher Flachsee im Osnabrücker Land, ~13 km².
+          Durchschnittliche Tiefe nur ~1,5 m, stark abhängig
+          von Niederschlag und Verdunstung.</p>
+        </div>
+        <div class="see-desc" id="info-Chiemsee">
+          <p><strong>Chiemsee</strong> · Bayern<br><br>
+          Größter bayerischer See, ~80 km². Natürlicher See
+          mit alpinem Einzugsgebiet. Pegelstand beeinflusst
+          durch Schneeschmelze und Alpenabflüsse.</p>
+        </div>
+        <div class="see-desc" id="info-Gross_Glienicker_See">
+          <p><strong>Groß Glienicker See</strong> · Berlin/Brandenburg<br><br>
+          Natürlicher Stadtsee an der Berliner Stadtgrenze, ~0,9 km².
+          Seit 2015 rückläufiger Wasserstand dokumentiert.
+          Besonders interessant für Trendanalyse.</p>
+        </div>
+      </div>
+
+      <!-- Kennzahlen -->
+      <div class="info-section">
+        <h3>Validierung (M5 vs. Pegelstand)</h3>
+        <div class="kennzahlen">
+          <div class="kz" id="kz-pearson-wrap">
+            <div class="kz-label">Pearson r</div>
+            <div class="kz-value" id="kz-pearson">—</div>
+          </div>
+          <div class="kz" id="kz-spearman-wrap">
+            <div class="kz-label">Spearman r</div>
+            <div class="kz-value" id="kz-spearman">—</div>
+          </div>
+          <div class="kz" id="kz-rmse-wrap">
+            <div class="kz-label">RMSE (norm.)</div>
+            <div class="kz-value" id="kz-rmse">—</div>
+          </div>
+          <div class="kz" id="kz-n-wrap">
+            <div class="kz-label">Monate (n)</div>
+            <div class="kz-value" id="kz-n">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- info-card -->
+  </div><!-- main-grid -->
+</div><!-- container -->
+
+<footer>
+  Bachelorarbeit · Alexej Balakin · Sentinel Datacubes · OpenEO · CDSE
+</footer>
+
+<script>
+
+  const SEEN     = ["Forggensee", "Dümmer", "Chiemsee", "Groß_Glienicker_See"];
+  const METHODEN = ["M1", "M2", "M3", "M4", "M5"];
+
+  // ── KENNZAHLEN PRO SEE (hier eintragen nach deiner Excel-Analyse) ──────────
+  // Pearson r (Gesamtkorrelation 120 Monate), Spearman r, RMSE, n Monate
+  const KENNZAHLEN = {
+    "Forggensee":          { pearson: "0.987", spearman: "0.971", rmse: "0.041", n: "120" },
+    "Dümmer":             { pearson: "—",     spearman: "—",     rmse: "—",     n: "—"   },
+    "Chiemsee":            { pearson: "—",     spearman: "—",     rmse: "—",     n: "—"   },
+    "Groß_Glienicker_See":{ pearson: "—",     spearman: "—",     rmse: "—",     n: "—"   },
+  };
+
+  // ── STATUS ────────────────────────────────────────────────────────────────
+  let aktiverSee     = "Forggensee";
+  let aktiveMethode  = "M1";
+
+  // ── AKTUALISIERUNG ────────────────────────────────────────────────────────
+  function update() {
+    const gifPath = `gifs/${aktiverSee}_${aktiveMethode}.gif`;
+    const img     = document.getElementById("gif-display");
+    const err     = document.getElementById("gif-error");
+
+    // GIF neu laden (verhindert gecachtes Standbild)
+    img.style.display = "none";
+    err.style.display = "none";
+    img.src = "";
+    img.src = gifPath;
+    img.onload  = () => { img.style.display = "block"; };
+    img.onerror = () => {
+      err.style.display = "block";
+      document.getElementById("gif-filename").textContent = gifPath;
+    };
+
+    // Titel + Badge
+    const seeLabel = {
+      "Forggensee":          "Forggensee",
+      "Dümmer":             "Dümmer",
+      "Chiemsee":            "Chiemsee",
+      "Groß_Glienicker_See":"Groß Glienicker See",
+    };
+    document.getElementById("gif-title-text").textContent = seeLabel[aktiverSee];
+    document.getElementById("gif-badge").textContent = aktiveMethode;
+
+    // Methoden-Beschreibung
+    document.querySelectorAll(".methode-desc").forEach(d => d.classList.remove("active"));
+    document.getElementById(`desc-${aktiveMethode}`).classList.add("active");
+
+    // See-Info
+    document.querySelectorAll(".see-desc").forEach(d => d.classList.remove("active"));
+    document.getElementById(`info-${aktiverSee}`).classList.add("active");
+
+    // Kennzahlen
+    const kz = KENNZAHLEN[aktiverSee] || {};
+    document.getElementById("kz-pearson").textContent  = kz.pearson  || "—";
+    document.getElementById("kz-spearman").textContent = kz.spearman || "—";
+    document.getElementById("kz-rmse").textContent     = kz.rmse     || "—";
+    document.getElementById("kz-n").textContent        = kz.n        || "—";
+  }
+
+  // ── BUTTONS ───────────────────────────────────────────────────────────────
+  document.querySelectorAll(".btn-see").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".btn-see").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      aktiverSee = btn.dataset.see;
+      update();
+    });
+  });
+
+  document.querySelectorAll(".btn-methode").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".btn-methode").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      aktiveMethode = btn.dataset.m;
+      update();
+    });
+  });
+
+  // Initial
+  update();
+</script>
+</body>
+</html>
