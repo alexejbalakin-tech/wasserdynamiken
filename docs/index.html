@@ -214,7 +214,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><span id="view-titel">Forggensee · M1</span></div>
+    <div class="card-head"><span id="view-titel"></span></div>
     <div class="card-body">
 
       <!-- DIAGRAMME: Validierungs-PNG -->
@@ -237,6 +237,11 @@
 
       <!-- OTSU-METHODE: Bildraster auffälliger Monate -->
       <div class="view-panel" id="view-otsu">
+        <p class="otsu-intro">
+          Die Otsu-Methode berechnet einen optimalen Schwellenwert, um Pixelwerte in zwei Klassen (Wasser und Land) zu unterteilen, 
+          indem sie die zwischenklassige Varianz maximiert. Bei der Anwendung der Otsu-Methode auf Sentinel-Daten sind in dieser Arbeit vier Schwierigkeiten aufgetreten: unimodale Verteilungen, überlappende 
+          Klassen (z.B. Eis und Land im Winter), fehlende Daten durch Wolkenbedeckung sowie Skaleneffekte bei kleinen Seen. Die folgenden Monate veranschaulichen 
+          diese Fälle beispielhaft.
         <div class="otsu-grid" id="otsu-grid"></div>
         <div class="hinweis" id="otsu-leer" style="display:none;">
           Für diesen See sind noch keine auffälligen Monate hinterlegt (siehe <code>OTSU_IMAGES</code> im Skript).</div>
@@ -285,9 +290,15 @@
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
   const csvPfad      = (see)    => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
   // OTSU – auffällige Monate je See selbst eintragen:
-  const OTSU_IMAGES  = {
-  "Forggensee": [ { src: "Daten/OTSU/OTSU_Forggensee_NDWI_2025-02", cap: "Aug 2018 · Niedrigstand" } ],
-  };
+  const OTSU_IMAGES  = [
+  { src: "Daten/OTSU/OTSU_Forggensee_S1_2017-02.png",       cap: "Überlappende Klassen – K0 Feb 2017 (Forggensee)" },
+  { src: "Daten/OTSU/OTSU_Forggensee_NDWI_2025-02.png",     cap: "Überlappende Klassen – NDWI Feb 2025 (Forggensee)" },
+  { src: "Daten/OTSU/OTSU_Dümmer_S1_2019-08.png",           cap: "Unimodale Verteilung – K0 Aug 2019 (Dümmer)" },
+  { src: "Daten/OTSU/OTSU_Dümmer_NDWI_2022-09.png",         cap: "Unimodale Verteilung – NDWI Sep 2022 (Dümmer)" },
+  { src: "Daten/OTSU/OTSU_Groß_Glienicker_See_NDWI_2016-11.png", cap: "Skaleneffekt – NDWI Nov 2016 (Groß Glienicker See)" },
+  { src: "Daten/OTSU/OTSU_Chiemsee_S1_2019-01.png",         cap: "Fehlende Daten – K0 Jan 2019 (Chiemsee)" },
+
+  ];
 
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
@@ -348,13 +359,14 @@
   }
 
   // ── Tabs (reine PNG-Anzeige) ─────────────────────────────────────
-  function fuelleOtsu(see) {
-    const grid = document.getElementById("otsu-grid");
-    const bilder = OTSU_IMAGES[see] || [];
-    document.getElementById("otsu-leer").style.display = bilder.length ? "none" : "block";
-    grid.innerHTML = bilder.map(b =>
-      `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt=""><div class="otsu-cap">${b.cap||""}</div></div>`).join("");
-  }
+function fuelleOtsu() {
+  const grid = document.getElementById("otsu-grid");
+  document.getElementById("otsu-leer").style.display = OTSU_IMAGES.length ? "none" : "block";
+  grid.innerHTML = OTSU_IMAGES.map(b =>
+    `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt="">
+     <div class="otsu-cap">${b.cap || ""}</div></div>`
+  ).join("");
+}
   function setzeBild(imgId, fbId, pfadId, src) {
     const img = document.getElementById(imgId);
     document.getElementById(fbId).style.display = "none";
@@ -362,7 +374,6 @@
     if (pfadId) document.getElementById(pfadId).textContent = src;
   }
   function refreshPanels() {
-    document.getElementById("view-titel").textContent = `${SEE_LABEL[aktiverSee]} · ${aktiveMethode}`;
     setzeBild("val-png",   "val-png-fb", "val-png-pfad", valPngPfad(aktiverSee, aktiveMethode));
     setzeBild("trend-png", "trend-fb",   "trend-pfad",   trendPngPfad(aktiverSee, aktiveMethode));
     document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
