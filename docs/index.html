@@ -340,7 +340,7 @@
     const kz = document.getElementById("trend-kz");
     if (!reg) { kz.textContent = "Keine Daten für diese Methode."; if (trendChart){trendChart.destroy();trendChart=null;} return; }
     kz.textContent = `Trend: ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/Jahr · n = ${reg.n} Monate`;
-    const punkte = reg.x.map((xi,i) => ({reg.y[i] }));
+    const punkte = reg.x.map((xi,i) => ({ x: xi+2016, y: reg.y[i] }));
     const xMin = Math.min(...reg.x), xMax = Math.max(...reg.x);
     const linie = [ {x:xMin+2016,y:reg.slope*xMin+reg.intercept}, {x:xMax+2016,y:reg.slope*xMax+reg.intercept} ];
     if (trendChart) trendChart.destroy();
