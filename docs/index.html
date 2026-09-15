@@ -818,6 +818,30 @@
       document.getElementById("play-btn").textContent = "⏸";
     }
   }
+    // ── Tabs steuern ─────────────────────────────────────────────────
+  function fuelleOtsu() {
+    const grid = document.getElementById("otsu-grid");
+    document.getElementById("otsu-leer").style.display = OTSU_IMAGES.length ? "none" : "block";
+    grid.innerHTML = OTSU_IMAGES.map(b =>
+      `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt=""><div class="otsu-cap">${b.cap || ""}</div></div>`
+    ).join("");
+  }
+
+  function refreshPanels() {
+    if (aktiveView === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
+    if (aktiveView === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
+    document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
+    document.getElementById("dl-csv").href = csvPfad(aktiverSee);
+    fuelleOtsu();
+  }
+
+  function setView(v) {
+    aktiveView = v;
+    document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+    document.querySelectorAll(".view-panel").forEach(p => p.classList.toggle("active", p.id === `view-${v}`));
+    if (v === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
+    if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
+  }
 
   // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
   function update() {
