@@ -611,36 +611,35 @@
 
   let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
 
-  // ── Animation ───────────────────────────────────────────────────
-// ── Animation + Bild-Cache ──────────────────────────────────────
-
-// Cache für die bereits geladenen Image-Objekte
+// ── Animation ───────────────────────────────────────────────────
   const frameCache = new Map();
   
+  /**
+   * Lädt alle Frames eines Sees/einer Methode und speichert
+   * die Image-Objekte im Cache.
+   */
   function preloadFrames(see, m) {
     const key = `${see}_${m}`;
-    const n = frameCount();
   
-    // Wenn dieser See/diese Methode bereits vollständig geladen wurde:
+    // Bereits geladen/angefordert
     if (frameCache.has(key)) {
-      const frames = frameCache.get(key);
-  
-      if (frames.filter(Boolean).length === n) {
-        document.getElementById("preload-row").style.display = "none";
-        return;
-      }
+      return;
     }
   
-    const row  = document.getElementById("preload-row");
-    const bar  = document.getElementById("preload-bar");
+    const row = document.getElementById("preload-row");
+    const bar = document.getElementById("preload-bar");
     const text = document.getElementById("preload-text");
+  
+    const n = frameCount();
   
     row.style.display = "flex";
     bar.style.width = "0%";
     text.textContent = `0 / ${n}`;
   
-    // Array für die Bilder dieses See/Methoden-Paares
+    // Array für die echten Image-Objekte
     const frames = new Array(n);
+  
+    // Sofort in den Cache legen
     frameCache.set(key, frames);
   
     let loaded = 0;
@@ -649,10 +648,14 @@
   
       const img = new Image();
   
+      frames[i] = img;
+  
       img.onload = () => {
         loaded++;
   
-        bar.style.width = `${(loaded / n) * 100}%`;
+        const progress = (loaded / n) * 100;
+  
+        bar.style.width = `${progress}%`;
         text.textContent = `${loaded} / ${n}`;
   
         if (loaded === n) {
@@ -661,75 +664,69 @@
       };
   
       img.onerror = () => {
+        loaded++;
+  
+        const progress = (loaded / n) * 100;
+  
+        bar.style.width = `${progress}%`;
+        text.textContent = `${loaded} / ${n}`;
+  
         console.warn(
           "Frame konnte nicht geladen werden:",
           framePfad(see, m, i)
         );
-  
-        loaded++;
-  
-        bar.style.width = `${(loaded / n) * 100}%`;
-        text.textContent = `${loaded} / ${n}`;
   
         if (loaded === n) {
           row.style.display = "none";
         }
       };
   
-      // WICHTIG:
-      // Image-Objekt sofort im Cache speichern
-      frames[i] = img;
-  
-      // Erst danach URL setzen und Laden starten
+      // Frame laden
       img.src = framePfad(see, m, i);
     }
   }
   
   
+  /**
+   * Zeigt einen bestimmten Frame an.
+   */
   function setFrame(i) {
   
+    // Frame-Index begrenzen
     frameIdx = Math.max(
       0,
       Math.min(frameCount() - 1, i)
     );
   
-    document.getElementById("frame-slider").max =
-      frameCount() - 1;
+    // Slider aktualisieren
+    const slider = document.getElementById("frame-slider");
   
-    document.getElementById("frame-slider").value =
-      frameIdx;
+    slider.max = frameCount(aktiverSee) - 1;
+    slider.value = frameIdx;
   
+    // Datum aktualisieren
     document.getElementById("frame-date-label").textContent =
       DATES[frameIdx];
   
     document.getElementById("title-date").textContent =
       DATES[frameIdx];
   
+    // Elemente
+    const img = document.getElementById("frame-display");
+    const load = document.getElementById("frame-loading");
+    const err = document.getElementById("frame-error");
   
-    const display = document.getElementById("frame-display");
-    const loading = document.getElementById("frame-loading");
-    const error = document.getElementById("frame-error");
+    img.style.display = "none";
+    err.style.display = "none";
+    load.style.display = "block";
   
-    const pfad =
-      framePfad(
-        aktiverSee,
-        aktiveMethode,
-        frameIdx
-      );
+    // Cache holen
+    const key = `${aktiverSee}_${aktiveMethode}`;
+    const frames = frameCache.get(key);
   
-  
-    // Cache für aktuellen See + Methode
-    const key =
-      `${aktiverSee}_${aktiveMethode}`;
-  
-    const frames =
-      frameCache.get(key);
-  
-  
-    // ─────────────────────────────────────────────
-    // 1. Bild befindet sich bereits im Cache
-    // ─────────────────────────────────────────────
-  
+    // ----------------------------------------------------------
+    // FALL 1: Frame ist bereits im Cache
+    // ----------------------------------------------------------
     if (
       frames &&
       frames[frameIdx] &&
@@ -737,76 +734,89 @@
       frames[frameIdx].naturalWidth > 0
     ) {
   
-      display.src = frames[frameIdx].src;
+      img.src = frames[frameIdx].src;
   
-      display.style.display = "block";
-      loading.style.display = "none";
-      error.style.display = "none";
+      load.style.display = "none";
+      img.style.display = "block";
   
       return;
     }
   
   
-    // ─────────────────────────────────────────────
-    // 2. Bild noch nicht geladen
-    // ─────────────────────────────────────────────
+    // ----------------------------------------------------------
+    // FALL 2: Frame noch nicht fertig geladen
+    // ----------------------------------------------------------
   
-    display.style.display = "none";
-    loading.style.display = "block";
-    error.style.display = "none";
+    const pfad = framePfad(
+      aktiverSee,
+      aktiveMethode,
+      frameIdx
+    );
   
+    img.src = pfad;
   
-    // Normales Laden als Fallback
-    display.onload = () => {
-  
-      loading.style.display = "none";
-      error.style.display = "none";
-      display.style.display = "block";
-  
+    img.onload = () => {
+      load.style.display = "none";
+      err.style.display = "none";
+      img.style.display = "block";
     };
   
-  
-    display.onerror = () => {
-  
-      loading.style.display = "none";
-      display.style.display = "none";
-      error.style.display = "block";
+    img.onerror = () => {
+      load.style.display = "none";
+      img.style.display = "none";
+      err.style.display = "block";
   
       document.getElementById("frame-errpfad").textContent =
         pfad;
     };
+  }
   
   
-    display.src = pfad;
+  /**
+   * Animation stoppen.
+   */
+  function stopPlay() {
+  
+    if (playTimer) {
+      clearInterval(playTimer);
+      playTimer = null;
+    }
+  
+    const button = document.getElementById("play-btn");
+  
+    if (button) {
+      button.textContent = "▶";
+    }
   }
-  // ── Tabs (reine PNG-Anzeige) ─────────────────────────────────────
-function fuelleOtsu() {
-  const grid = document.getElementById("otsu-grid");
-  document.getElementById("otsu-leer").style.display = OTSU_IMAGES.length ? "none" : "block";
-  grid.innerHTML = OTSU_IMAGES.map(b =>
-    `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt="">
-     <div class="otsu-cap">${b.cap || ""}</div></div>`
-  ).join("");
-}
-  function setzeBild(imgId, fbId, pfadId, src) {
-    const img = document.getElementById(imgId);
-    document.getElementById(fbId).style.display = "none";
-    img.style.display = "block"; img.src = src;
-    if (pfadId) document.getElementById(pfadId).textContent = src;
-  }
-  function refreshPanels() {
-    if (aktiveView === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
-    if (aktiveView === "trend") zeichneTrend(aktiverSee, aktiveMethode);
-    document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
-    document.getElementById("dl-csv").href = csvPfad(aktiverSee);
-    fuelleOtsu(aktiverSee);
-  }
-  function setView(v) {
-    aktiveView = v;
-    document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-    document.querySelectorAll(".view-panel").forEach(p => p.classList.toggle("active", p.id === `view-${v}`));
-    if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
-    if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
+  
+  
+  /**
+   * Animation starten/stoppen.
+   */
+  function togglePlay() {
+  
+    if (playTimer) {
+  
+      // Animation läuft → stoppen
+      stopPlay();
+  
+    } else {
+  
+      // Animation starten
+      const ms = parseInt(
+        document.getElementById("speed-select").value
+      );
+  
+      playTimer = setInterval(() => {
+  
+        setFrame(
+          (frameIdx + 1) % frameCount()
+        );
+  
+      }, ms);
+  
+      document.getElementById("play-btn").textContent = "⏸";
+    }
   }
 
   // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
