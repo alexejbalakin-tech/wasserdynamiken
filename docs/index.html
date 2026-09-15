@@ -612,35 +612,20 @@
   let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
 
   // ── Animation ───────────────────────────────────────────────────
-  const preloaded = new Set();
-  function preloadFrames(see, m) {
-    const key = `${see}_${m}`; if (preloaded.has(key)) return;
-    const row = document.getElementById("preload-row");
-    const bar = document.getElementById("preload-bar");
-    const text = document.getElementById("preload-text");
-    const n = frameCount();
-    row.style.display = "flex"; bar.style.width = "0%"; text.textContent = `0 / ${n}`;
-    let loaded = 0;
-    for (let i = 0; i < n; i++) {
-      const img = new Image();
-      img.onload = img.onerror = () => {
-        loaded++; bar.style.width = `${(loaded/n)*100}%`; text.textContent = `${loaded} / ${n}`;
-        if (loaded === n) { preloaded.add(key); row.style.display = "none"; }
-      };
-      img.src = framePfad(see, m, i);
-    }
-  }
+// ── Animation + Bild-Cache ──────────────────────────────────────
+
+// Cache für die bereits geladenen Image-Objekte
   const frameCache = new Map();
   
   function preloadFrames(see, m) {
-  
     const key = `${see}_${m}`;
+    const n = frameCount();
   
-    // Bereits vollständig geladen
+    // Wenn dieser See/diese Methode bereits vollständig geladen wurde:
     if (frameCache.has(key)) {
-      const cached = frameCache.get(key);
+      const frames = frameCache.get(key);
   
-      if (cached.every(img => img.complete)) {
+      if (frames.filter(Boolean).length === n) {
         document.getElementById("preload-row").style.display = "none";
         return;
       }
@@ -650,12 +635,11 @@
     const bar  = document.getElementById("preload-bar");
     const text = document.getElementById("preload-text");
   
-    const n = frameCount();
-  
     row.style.display = "flex";
     bar.style.width = "0%";
     text.textContent = `0 / ${n}`;
   
+    // Array für die Bilder dieses See/Methoden-Paares
     const frames = new Array(n);
     frameCache.set(key, frames);
   
@@ -665,10 +649,7 @@
   
       const img = new Image();
   
-      frames[i] = img;
-  
       img.onload = () => {
-  
         loaded++;
   
         bar.style.width = `${(loaded / n) * 100}%`;
@@ -680,22 +661,31 @@
       };
   
       img.onerror = () => {
-  
-        loaded++;
-  
         console.warn(
           "Frame konnte nicht geladen werden:",
           framePfad(see, m, i)
         );
+  
+        loaded++;
+  
+        bar.style.width = `${(loaded / n) * 100}%`;
+        text.textContent = `${loaded} / ${n}`;
   
         if (loaded === n) {
           row.style.display = "none";
         }
       };
   
+      // WICHTIG:
+      // Image-Objekt sofort im Cache speichern
+      frames[i] = img;
+  
+      // Erst danach URL setzen und Laden starten
       img.src = framePfad(see, m, i);
     }
   }
+  
+  
   function setFrame(i) {
   
     frameIdx = Math.max(
@@ -704,7 +694,7 @@
     );
   
     document.getElementById("frame-slider").max =
-      frameCount(aktiverSee) - 1;
+      frameCount() - 1;
   
     document.getElementById("frame-slider").value =
       frameIdx;
@@ -715,50 +705,79 @@
     document.getElementById("title-date").textContent =
       DATES[frameIdx];
   
-    const img  = document.getElementById("frame-display");
-    const load = document.getElementById("frame-loading");
-    const err  = document.getElementById("frame-error");
   
-    const key = `${aktiverSee}_${aktiveMethode}`;
-    const frames = frameCache.get(key);
+    const display = document.getElementById("frame-display");
+    const loading = document.getElementById("frame-loading");
+    const error = document.getElementById("frame-error");
   
-    // ── Frame aus Cache verwenden ──
-    if (frames && frames[frameIdx] && frames[frameIdx].complete) {
+    const pfad =
+      framePfad(
+        aktiverSee,
+        aktiveMethode,
+        frameIdx
+      );
   
-      img.src = frames[frameIdx].src;
   
-      load.style.display = "none";
-      err.style.display = "none";
-      img.style.display = "block";
+    // Cache für aktuellen See + Methode
+    const key =
+      `${aktiverSee}_${aktiveMethode}`;
+  
+    const frames =
+      frameCache.get(key);
+  
+  
+    // ─────────────────────────────────────────────
+    // 1. Bild befindet sich bereits im Cache
+    // ─────────────────────────────────────────────
+  
+    if (
+      frames &&
+      frames[frameIdx] &&
+      frames[frameIdx].complete &&
+      frames[frameIdx].naturalWidth > 0
+    ) {
+  
+      display.src = frames[frameIdx].src;
+  
+      display.style.display = "block";
+      loading.style.display = "none";
+      error.style.display = "none";
   
       return;
     }
   
-    // ── Falls noch nicht geladen ──
-    img.style.display = "none";
-    err.style.display = "none";
-    load.style.display = "block";
   
-    const pfad = framePfad(
-      aktiverSee,
-      aktiveMethode,
-      frameIdx
-    );
+    // ─────────────────────────────────────────────
+    // 2. Bild noch nicht geladen
+    // ─────────────────────────────────────────────
   
-    img.src = pfad;
+    display.style.display = "none";
+    loading.style.display = "block";
+    error.style.display = "none";
   
-    img.onload = () => {
-      load.style.display = "none";
-      img.style.display = "block";
+  
+    // Normales Laden als Fallback
+    display.onload = () => {
+  
+      loading.style.display = "none";
+      error.style.display = "none";
+      display.style.display = "block";
+  
     };
   
-    img.onerror = () => {
-      load.style.display = "none";
-      err.style.display = "block";
+  
+    display.onerror = () => {
+  
+      loading.style.display = "none";
+      display.style.display = "none";
+      error.style.display = "block";
   
       document.getElementById("frame-errpfad").textContent =
         pfad;
     };
+  
+  
+    display.src = pfad;
   }
   // ── Tabs (reine PNG-Anzeige) ─────────────────────────────────────
 function fuelleOtsu() {
