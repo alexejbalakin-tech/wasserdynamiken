@@ -341,11 +341,6 @@
     return { slope, intercept, n, x, y };
   }
   function zeichneTrendAus(rows, methode) {
-    plugins: {
-      title: { display: true, text: "Langzeit-Trend der Wasserfläche",
-                font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
-      legend: { position: "top" },
-    },
     const reg = linRegCsv(rows, SPALTE[methode]);
     const kz = document.getElementById("trend-kz");
     if (!reg) { kz.textContent = "Keine Daten für diese Methode."; if (trendChart){trendChart.destroy();trendChart=null;} return; }
