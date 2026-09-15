@@ -218,13 +218,11 @@
     <div class="card-head"><span id="view-titel"></span></div>
     <div class="card-body">
 
-      <!-- DIAGRAMME: Validierungs-PNG -->
+      <!-- DIAGRAMME: interaktiv (Pegel vs. Satellit, normiert) -->
       <div class="view-panel active" id="view-diagramme">
-        <img class="png-box" zoomable id="val-png" alt="Validierungsdiagramm"
-             onerror="this.style.display='none';document.getElementById('val-png-fb').style.display='flex';">
-        <div class="png-fallback" id="val-png-fb">Validierungs-PNG nicht gefunden – bitte
-          <code>validierung_alle_seen.py</code> ausführen (oder Pfad oben im Skript prüfen).</div>
-        <div class="pfad" id="val-png-pfad"></div>
+        <div id="val-kz" style="color:#1a3a5c;font-weight:700;margin-bottom:10px;">–</div>
+        <div style="position:relative;height:360px;"><canvas id="val-chart"></canvas></div>
+        <div class="pfad" id="val-status"></div>
       </div>
 
       <!-- TREND: Trend-PNG -->
@@ -353,6 +351,48 @@
       .then(text => { csvCache[see] = parseCSV(text); status.textContent = csvPfad(see); zeichneTrendAus(csvCache[see], methode); })
       .catch(e => { status.textContent = "CSV konnte nicht geladen werden (" + e + ")."; });
   }
+    // ── HAUPTDIAGRAMM: Pegel vs. Satellit aus DERSELBEN CSV (Chart.js) ─
+  const PEGEL_SPALTE = "Pegelstand";   // <-- exakt wie die Spalte in deiner CSV heißt
+  let hauptChart = null;
+
+  function normArr(a){ const mn=Math.min(...a), mx=Math.max(...a); return a.map(v=>mx>mn?(v-mn)/(mx-mn):0); }
+  function pearson2(x,y){ const n=x.length,mx=x.reduce((a,b)=>a+b,0)/n,my=y.reduce((a,b)=>a+b,0)/n;
+    let s=0,dx=0,dy=0; for(let i=0;i<n;i++){s+=(x[i]-mx)*(y[i]-my);dx+=(x[i]-mx)**2;dy+=(y[i]-my)**2;} return s/Math.sqrt(dx*dy); }
+  function rank(a){ const s=a.map((v,i)=>[v,i]).sort((p,q)=>p[0]-q[0]); const r=new Array(a.length);
+    for(let i=0;i<s.length;){let j=i;while(j<s.length-1&&s[j][0]===s[j+1][0])j++;const rr=(i+j)/2+1;for(let k=i;k<=j;k++)r[s[k][1]]=rr;i=j+1;} return r; }
+  function spearman2(x,y){ return pearson2(rank(x),rank(y)); }
+
+  function zeichneHauptAus(rows, methode) {
+    const col = SPALTE[methode], farbe = TFARBE[methode];
+    const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
+                       .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
+                       .sort((a,b)=>a.m<b.m?-1:1);
+    const kz = document.getElementById("val-kz");
+    if (merged.length < 3) { kz.textContent="Zu wenige Monate mit Pegel + Fläche."; if(hauptChart){hauptChart.destroy();hauptChart=null;} return; }
+    const labels=merged.map(r=>r.m), peg=merged.map(r=>r.peg), area=merged.map(r=>r.area);
+    const pr=pearson2(peg,area), sr=spearman2(peg,area);
+    kz.textContent = `Pearson r = ${pr.toFixed(3)} · Spearman r = ${sr.toFixed(3)} · n = ${merged.length} Monate`;
+    const pegN=normArr(peg), satN=normArr(area);
+    if (hauptChart) hauptChart.destroy();
+    hauptChart = new Chart(document.getElementById("val-chart"), {
+      type:"line",
+      data:{ labels, datasets:[
+        { label:"Pegelstand (normiert)", data:pegN, borderColor:"#1a3a5c", backgroundColor:"#1a3a5c", pointRadius:0, borderWidth:2, tension:.2 },
+        { label:`Satellit ${methode} (normiert)`, data:satN, borderColor:farbe, backgroundColor:farbe, pointRadius:0, borderWidth:2, borderDash:[6,4], tension:.2 },
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
+        plugins:{legend:{position:"top"}},
+        scales:{ y:{min:0,max:1,title:{display:true,text:"Normierter Wert [0–1]"}}, x:{ticks:{maxTicksLimit:12}} } }
+    });
+  }
+  function zeichneHaupt(see, methode) {
+    const status = document.getElementById("val-status");
+    if (csvCache[see]) { status.textContent=""; zeichneHauptAus(csvCache[see], methode); return; }
+    status.textContent = "Lade " + csvPfad(see) + " …";
+    fetch(csvPfad(see)).then(r=>{if(!r.ok)throw new Error(r.status);return r.text();})
+      .then(t=>{ csvCache[see]=parseCSV(t); status.textContent=""; zeichneHauptAus(csvCache[see], methode); })
+      .catch(e=>{ status.textContent="CSV konnte nicht geladen werden ("+e+")."; });
+  }
 
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
@@ -428,7 +468,7 @@ function fuelleOtsu() {
     if (pfadId) document.getElementById(pfadId).textContent = src;
   }
   function refreshPanels() {
-    setzeBild("val-png",   "val-png-fb", "val-png-pfad", valPngPfad(aktiverSee, aktiveMethode));
+    if (aktiveView === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
     if (aktiveView === "trend") zeichneTrend(aktiverSee, aktiveMethode);
     document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
     document.getElementById("dl-csv").href = csvPfad(aktiverSee);
@@ -439,6 +479,7 @@ function fuelleOtsu() {
     document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
     document.querySelectorAll(".view-panel").forEach(p => p.classList.toggle("active", p.id === `view-${v}`));
     if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
+    if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
   }
 
   // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
@@ -483,6 +524,7 @@ function fuelleOtsu() {
     if (e.key === "ArrowRight") { stopPlay(); setFrame(frameIdx + 1); }
     if (e.key === " ")          { e.preventDefault(); togglePlay(); }
     if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
+    if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
   });
 
   // Schatten unter der Sticky-Nav nur wenn sie klebt
