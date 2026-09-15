@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wasserdynamiken – Sentinel Datacubes</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a2a3a; }
@@ -93,7 +94,7 @@
 <body>
 
 <header>
-  <h1>Analyse und Visualisierung saisonaler Wasserflächendynamiken mittels Sentinel Data Cubes</h1>
+  <h1>Analyse und Visualisierung der Wasserdynamiken mit Sentinel Datacubes</h1>
   <p>Bachelorarbeit · Alexej Balakin · Sentinel-1 + Sentinel-2 · 2016–2025</p>
 </header>
 
@@ -227,12 +228,11 @@
       </div>
 
       <!-- TREND: Trend-PNG -->
+      <!-- TREND: interaktiv aus der CSV (Chart.js) -->
       <div class="view-panel" id="view-trend">
-        <img class="png-box" zoomable id="trend-png" alt="Trendanalyse"
-             onerror="this.style.display='none';document.getElementById('trend-fb').style.display='flex';">
-        <div class="png-fallback" id="trend-fb">Trend-PNG noch nicht erzeugt – dafür
-          <code>trend_snippet.py</code> je See/Methode laufen lassen.</div>
-        <div class="pfad" id="trend-pfad"></div>
+        <div id="trend-kz" style="color:#1a3a5c;font-weight:700;margin-bottom:10px;">–</div>
+        <div style="position:relative;height:360px;"><canvas id="trend-chart"></canvas></div>
+        <div class="pfad" id="trend-status"></div>
       </div>
 
       <!-- OTSU-METHODE: Bildraster auffälliger Monate -->
@@ -299,6 +299,60 @@
   { src: "Daten/OTSU/OTSU_Chiemsee_S1_2019-01.png",         cap: "Fehlende Daten – K0 Jan 2019 (Chiemsee)" },
 
   ];
+
+    // ── TREND aus CSV (Chart.js) ─────────────────────────────────────
+  const SPALTE = { M1:"M1_S1_K0_km2", M2:"M2_S2_NDWI_km2", M3:"M3_AND_km2", M4:"M4_OR_km2", M5:"M5_WEIGHTED_km2" };
+  const TFARBE = { M1:"#2196F3", M2:"#FF9800", M3:"#4CAF50", M4:"#9C27B0", M5:"#F44336" };
+  const csvCache = {};
+  let trendChart = null;
+
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const head = lines[0].split(";").map(s => s.trim());
+    return lines.slice(1).map(l => {
+      const c = l.split(";"); const o = {};
+      head.forEach((h, i) => o[h] = (c[i] || "").trim().replace(",", "."));
+      return o;
+    });
+  }
+  function linRegCsv(rows, col) {
+    const pts = rows.filter(r => r.datum && r[col] !== "" && !isNaN(parseFloat(r[col])));
+    if (pts.length < 3) return null;
+    const x = pts.map(r => { const [y,m] = r.datum.split("-").map(Number); return (y-2016)+(m-1)/12; });
+    const y = pts.map(r => parseFloat(r[col]));
+    const n = x.length, xM = x.reduce((a,b)=>a+b,0)/n, yM = y.reduce((a,b)=>a+b,0)/n;
+    const Sxx = x.reduce((a,xi)=>a+(xi-xM)**2,0), Sxy = x.reduce((a,xi,i)=>a+(xi-xM)*(y[i]-yM),0);
+    const slope = Sxy/Sxx, intercept = yM - slope*xM;
+    return { slope, intercept, n, x, y };
+  }
+  function zeichneTrendAus(rows, methode) {
+    const reg = linRegCsv(rows, SPALTE[methode]);
+    const kz = document.getElementById("trend-kz");
+    if (!reg) { kz.textContent = "Keine Daten für diese Methode."; if (trendChart){trendChart.destroy();trendChart=null;} return; }
+    kz.textContent = `Trend: ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/Jahr · n = ${reg.n} Monate`;
+    const punkte = reg.x.map((xi,i) => ({ x: xi+2016, y: reg.y[i] }));
+    const xMin = Math.min(...reg.x), xMax = Math.max(...reg.x);
+    const linie = [ {x:xMin+2016,y:reg.slope*xMin+reg.intercept}, {x:xMax+2016,y:reg.slope*xMax+reg.intercept} ];
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(document.getElementById("trend-chart"), {
+      data: { datasets: [
+        { type:"scatter", label:`Wasserfläche ${methode} [km²]`, data:punkte, pointRadius:3, backgroundColor:TFARBE[methode]+"aa" },
+        { type:"line", label:`Trend ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/a`, data:linie, borderColor:"#e53935", borderWidth:2, pointRadius:0, tension:0 },
+      ]},
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"top"}},
+        scales:{ x:{type:"linear",title:{display:true,text:"Jahr"},ticks:{callback:v=>v.toFixed(0)}},
+                 y:{title:{display:true,text:"Wasserfläche [km²]"}} } }
+    });
+  }
+  function zeichneTrend(see, methode) {
+    const status = document.getElementById("trend-status");
+    if (csvCache[see]) { zeichneTrendAus(csvCache[see], methode); return; }
+    status.textContent = "Lade " + csvPfad(see) + " …";
+    fetch(csvPfad(see))
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(text => { csvCache[see] = parseCSV(text); status.textContent = csvPfad(see); zeichneTrendAus(csvCache[see], methode); })
+      .catch(e => { status.textContent = "CSV konnte nicht geladen werden (" + e + ")."; });
+  }
 
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
@@ -375,7 +429,7 @@ function fuelleOtsu() {
   }
   function refreshPanels() {
     setzeBild("val-png",   "val-png-fb", "val-png-pfad", valPngPfad(aktiverSee, aktiveMethode));
-    setzeBild("trend-png", "trend-fb",   "trend-pfad",   trendPngPfad(aktiverSee, aktiveMethode));
+    if (aktiveView === "trend") zeichneTrend(aktiverSee, aktiveMethode);
     document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
     document.getElementById("dl-csv").href = csvPfad(aktiverSee);
     fuelleOtsu(aktiverSee);
@@ -384,6 +438,7 @@ function fuelleOtsu() {
     aktiveView = v;
     document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
     document.querySelectorAll(".view-panel").forEach(p => p.classList.toggle("active", p.id === `view-${v}`));
+    if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
   }
 
   // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
@@ -427,6 +482,7 @@ function fuelleOtsu() {
     if (e.key === "ArrowLeft")  { stopPlay(); setFrame(frameIdx - 1); }
     if (e.key === "ArrowRight") { stopPlay(); setFrame(frameIdx + 1); }
     if (e.key === " ")          { e.preventDefault(); togglePlay(); }
+    if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
   });
 
   // Schatten unter der Sticky-Nav nur wenn sie klebt
@@ -494,7 +550,11 @@ function fuelleOtsu() {
   const startBtn = document.querySelector(".btn-see.active");
   if (startBtn) aktiveFrameCount = parseInt(startBtn.dataset.frames) || 120;
 
+  
+
   update();
+
+
 </script>
 </body>
 </html>
