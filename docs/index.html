@@ -285,7 +285,6 @@
   const ROOT = "Daten";
 
   const M_LABEL = { M1:"M1 S1-Otsu", M2:"M2 S2-NDWI", M3:"M3 AND", M4:"M4 OR", M5:"M5 Weighted" };
-
   // Animation der Monatskarten (deine bestehende Struktur):
   function framePfad(see, m, idx) {
     return `${ROOT}/Frames/${see}_${M_LABEL[m].replace(/ /g,"_")}_${String(idx).padStart(4,"0")}.jpg`;
@@ -445,15 +444,12 @@
     const status = document.getElementById("abw-status");
   
     if (merged.length < 2) {
-  
       if (abwChart) {
         abwChart.destroy();
         abwChart = null;
       }
-  
       status.textContent =
         `Keine Δ-Spalte verfügbar (erwartet: '${deltaCol}').`;
-  
       return;
     }
   
@@ -461,26 +457,18 @@
     const abw = merged.map(r =>
       Math.min(50, Math.max(0, r.delta / r.area * 100))
     );
-  
     // Mittelwert
     const mittel =
       abw.reduce((sum, value) => sum + value, 0) / abw.length;
-  
     const labels = merged.map(r => r.m);
-  
     if (abwChart) {
       abwChart.destroy();
     }
-  
     abwChart = new Chart(document.getElementById("abw-chart"), {
-  
       type: "line",
-  
       data: {
         labels: labels,
-  
         datasets: [
-  
           // ΔA/A
           {
             label: "ΔA / A [%]",
@@ -492,7 +480,6 @@
             borderWidth: 1.5,
             tension: 0.2
           },
-  
           // Mittelwert
           {
             label: `Mittel: ${mittel.toFixed(1)} %`,
@@ -504,25 +491,19 @@
             pointRadius: 0,
             fill: false
           }
-  
         ]
       },
-  
       options: {
-  
         responsive: true,
         maintainAspectRatio: false,
-  
         interaction: {
           mode: "index",
           intersect: false
         },
-  
         plugins: {
           legend: {
             position: "top"
           },
-  
           tooltip: {
             callbacks: {
               label: function(context) {
@@ -533,203 +514,145 @@
             }
           }
         },
-  
         scales: {
-  
           x: {
             ticks: {
               maxTicksLimit: 12
             },
-  
             title: {
               display: true,
               text: "Datum"
             }
           },
-  
           y: {
             beginAtZero: true,
-  
             title: {
               display: true,
               text: "ΔA / A [%]"
             }
           }
-  
         }
-  
       }
-  
     });
-
   status.textContent =
     `${deltaCol} · Mittelwert: ${mittel.toFixed(2)} %`;
   }
   function zeichneHaupt(see, methode) {
-  
     const status = document.getElementById("val-status");
-  
     if (csvCache[see]) {
-  
       status.textContent = "";
-  
       zeichneHauptAus(csvCache[see], methode);
       zeichneAbweichungAus(csvCache[see], methode);
-  
       return;
     }
-  
-    status.textContent = "Lade " + csvPfad(see) + " …";
-  
+    status.textContent = "Lade " + csvPfad(see) + " …"; 
     fetch(csvPfad(see))
       .then(r => {
         if (!r.ok) throw new Error(r.status);
         return r.text();
       })
       .then(t => {
-  
         csvCache[see] = parseCSV(t);
-  
         status.textContent = "";
-  
         zeichneHauptAus(csvCache[see], methode);
         zeichneAbweichungAus(csvCache[see], methode);
-  
       })
       .catch(e => {
-  
         status.textContent =
           "CSV konnte nicht geladen werden (" + e + ").";
-  
       });
   }
-
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
   const MONATSNAMEN = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
   const DATES = [];
   for (let y = 2016; y <= 2025; y++) for (let m = 0; m < 12; m++) DATES.push(`${MONATSNAMEN[m]} ${y}`);
-
   function frameCount() {
     const b = document.querySelector(".btn-see.active");
     return (b && parseInt(b.dataset.frames)) || 120;
   }
-
   let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
-
 // ── Animation ───────────────────────────────────────────────────
-  const frameCache = new Map();
-  
+  const frameCache = new Map(); 
   /**
    * Lädt alle Frames eines Sees/einer Methode und speichert
    * die Image-Objekte im Cache.
    */
   function preloadFrames(see, m) {
     const key = `${see}_${m}`;
-  
     // Bereits geladen/angefordert
     if (frameCache.has(key)) {
       return;
     }
-  
     const row = document.getElementById("preload-row");
     const bar = document.getElementById("preload-bar");
-    const text = document.getElementById("preload-text");
-  
+    const text = document.getElementById("preload-text"); 
     const n = frameCount();
-  
     row.style.display = "flex";
     bar.style.width = "0%";
     text.textContent = `0 / ${n}`;
-  
     // Array für die echten Image-Objekte
     const frames = new Array(n);
-  
     // Sofort in den Cache legen
     frameCache.set(key, frames);
-  
     let loaded = 0;
-  
     for (let i = 0; i < n; i++) {
-  
       const img = new Image();
-  
       frames[i] = img;
-  
       img.onload = () => {
-        loaded++;
-  
-        const progress = (loaded / n) * 100;
-  
+        loaded++;  
+        const progress = (loaded / n) * 100;  
         bar.style.width = `${progress}%`;
-        text.textContent = `${loaded} / ${n}`;
-  
+        text.textContent = `${loaded} / ${n}`;  
         if (loaded === n) {
           row.style.display = "none";
         }
-      };
-  
+      };  
       img.onerror = () => {
-        loaded++;
-  
+        loaded++;  
         const progress = (loaded / n) * 100;
-  
         bar.style.width = `${progress}%`;
         text.textContent = `${loaded} / ${n}`;
-  
         console.warn(
           "Frame konnte nicht geladen werden:",
           framePfad(see, m, i)
         );
-  
         if (loaded === n) {
           row.style.display = "none";
         }
-      };
-  
+      }; 
       // Frame laden
       img.src = framePfad(see, m, i);
     }
-  }
-  
-  
+  }  
   /**
    * Zeigt einen bestimmten Frame an.
    */
-  function setFrame(i) {
-  
+  function setFrame(i) {  
     // Frame-Index begrenzen
     frameIdx = Math.max(
       0,
       Math.min(frameCount() - 1, i)
-    );
-  
+    );  
     // Slider aktualisieren
-    const slider = document.getElementById("frame-slider");
-  
+    const slider = document.getElementById("frame-slider"); 
     slider.max = frameCount(aktiverSee) - 1;
-    slider.value = frameIdx;
-  
+    slider.value = frameIdx; 
     // Datum aktualisieren
     document.getElementById("frame-date-label").textContent =
       DATES[frameIdx];
-  
     document.getElementById("title-date").textContent =
-      DATES[frameIdx];
-  
+      DATES[frameIdx]; 
     // Elemente
     const img = document.getElementById("frame-display");
     const load = document.getElementById("frame-loading");
     const err = document.getElementById("frame-error");
-  
     img.style.display = "none";
     err.style.display = "none";
-    load.style.display = "block";
-  
+    load.style.display = "block"; 
     // Cache holen
     const key = `${aktiverSee}_${aktiveMethode}`;
-    const frames = frameCache.get(key);
-  
+    const frames = frameCache.get(key); 
     // ----------------------------------------------------------
     // FALL 1: Frame ist bereits im Cache
     // ----------------------------------------------------------
@@ -739,88 +662,63 @@
       frames[frameIdx].complete &&
       frames[frameIdx].naturalWidth > 0
     ) {
-  
       img.src = frames[frameIdx].src;
-  
       load.style.display = "none";
       img.style.display = "block";
-  
       return;
-    }
-  
-  
+    }  
     // ----------------------------------------------------------
     // FALL 2: Frame noch nicht fertig geladen
-    // ----------------------------------------------------------
-  
+    // ----------------------------------------------------------  
     const pfad = framePfad(
       aktiverSee,
       aktiveMethode,
       frameIdx
-    );
-  
+    ); 
     img.src = pfad;
-  
     img.onload = () => {
       load.style.display = "none";
       err.style.display = "none";
       img.style.display = "block";
     };
-  
     img.onerror = () => {
       load.style.display = "none";
       img.style.display = "none";
       err.style.display = "block";
-  
       document.getElementById("frame-errpfad").textContent =
         pfad;
     };
-  }
-  
-  
+  } 
   /**
    * Animation stoppen.
    */
   function stopPlay() {
-  
     if (playTimer) {
       clearInterval(playTimer);
       playTimer = null;
     }
-  
-    const button = document.getElementById("play-btn");
-  
+    const button = document.getElementById("play-btn"); 
     if (button) {
       button.textContent = "▶";
     }
-  }
-  
-  
+  }  
   /**
    * Animation starten/stoppen.
    */
   function togglePlay() {
-  
     if (playTimer) {
-  
       // Animation läuft → stoppen
-      stopPlay();
-  
-    } else {
-  
+      stopPlay(); 
+    } else { 
       // Animation starten
       const ms = parseInt(
         document.getElementById("speed-select").value
       );
-  
-      playTimer = setInterval(() => {
-  
+      playTimer = setInterval(() => { 
         setFrame(
           (frameIdx + 1) % frameCount()
         );
-  
-      }, ms);
-  
+      }, ms); 
       document.getElementById("play-btn").textContent = "⏸";
     }
   }
@@ -832,15 +730,15 @@
       `<div class="otsu-item"><img class="zoomable" src="${b.src}" alt=""><div class="otsu-cap">${b.cap || ""}</div></div>`
     ).join("");
   }
-
   function refreshPanels() {
     if (aktiveView === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
     if (aktiveView === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
-    document.getElementById("dl-png").href = valPngPfad(aktiverSee, aktiveMethode);
-    document.getElementById("dl-csv").href = csvPfad(aktiverSee);
+    const dlPng = document.getElementById("dl-png");
+    const dlCsv = document.getElementById("dl-csv");
+    if (dlPng) dlPng.href = valPngPfad(aktiverSee, aktiveMethode);
+    if (dlCsv) dlCsv.href = csvPfad(aktiverSee);
     fuelleOtsu();
   }
-
   function setView(v) {
     aktiveView = v;
     document.querySelectorAll(".btn-view").forEach(b => b.classList.toggle("active", b.dataset.view === v));
@@ -848,7 +746,6 @@
     if (v === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
     if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
   }
-
   // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
   function update() {
     stopPlay(); frameIdx = 0;
@@ -870,7 +767,6 @@
     preloadFrames(aktiverSee, aktiveMethode);
     refreshPanels();
   }
-
   // ── Events ───────────────────────────────────────────────────────
   document.getElementById("play-btn").addEventListener("click", togglePlay);
   document.getElementById("prev-btn").addEventListener("click", () => { stopPlay(); setFrame(frameIdx - 1); });
@@ -956,8 +852,6 @@
   // Startwert der Bildanzahl vom anfangs aktiven See-Button übernehmen
   const startBtn = document.querySelector(".btn-see.active");
   if (startBtn) aktiveFrameCount = parseInt(startBtn.dataset.frames) || 120;
-
-  
 
   update();
 
