@@ -630,32 +630,136 @@
       img.src = framePfad(see, m, i);
     }
   }
-  function setFrame(i) {
-    frameIdx = Math.max(0, Math.min(frameCount() - 1, i));
-    document.getElementById("frame-slider").max = frameCount(aktiverSee) - 1;
-    document.getElementById("frame-slider").value = frameIdx;
-    document.getElementById("frame-date-label").textContent = DATES[frameIdx];
-    document.getElementById("title-date").textContent = DATES[frameIdx];
-    const img = document.getElementById("frame-display");
-    const load = document.getElementById("frame-loading");
-    const err = document.getElementById("frame-error");
-    img.style.display = "none"; err.style.display = "none"; load.style.display = "block";
-    const pfad = framePfad(aktiverSee, aktiveMethode, frameIdx);
-    img.src = pfad;
-    img.onload = () => { load.style.display = "none"; img.style.display = "block"; };
-    img.onerror = () => { load.style.display = "none"; err.style.display = "block";
-      document.getElementById("frame-errpfad").textContent = pfad; };
-  }
-  function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; }
-    document.getElementById("play-btn").textContent = "▶"; }
-  function togglePlay() {
-    if (playTimer) { stopPlay(); } else {
-      const ms = parseInt(document.getElementById("speed-select").value);
-      playTimer = setInterval(() => setFrame((frameIdx + 1) % frameCount()), ms);
-      document.getElementById("play-btn").textContent = "⏸";
+  const frameCache = new Map();
+  
+  function preloadFrames(see, m) {
+  
+    const key = `${see}_${m}`;
+  
+    // Bereits vollständig geladen
+    if (frameCache.has(key)) {
+      const cached = frameCache.get(key);
+  
+      if (cached.every(img => img.complete)) {
+        document.getElementById("preload-row").style.display = "none";
+        return;
+      }
+    }
+  
+    const row  = document.getElementById("preload-row");
+    const bar  = document.getElementById("preload-bar");
+    const text = document.getElementById("preload-text");
+  
+    const n = frameCount();
+  
+    row.style.display = "flex";
+    bar.style.width = "0%";
+    text.textContent = `0 / ${n}`;
+  
+    const frames = new Array(n);
+    frameCache.set(key, frames);
+  
+    let loaded = 0;
+  
+    for (let i = 0; i < n; i++) {
+  
+      const img = new Image();
+  
+      frames[i] = img;
+  
+      img.onload = () => {
+  
+        loaded++;
+  
+        bar.style.width = `${(loaded / n) * 100}%`;
+        text.textContent = `${loaded} / ${n}`;
+  
+        if (loaded === n) {
+          row.style.display = "none";
+        }
+      };
+  
+      img.onerror = () => {
+  
+        loaded++;
+  
+        console.warn(
+          "Frame konnte nicht geladen werden:",
+          framePfad(see, m, i)
+        );
+  
+        if (loaded === n) {
+          row.style.display = "none";
+        }
+      };
+  
+      img.src = framePfad(see, m, i);
     }
   }
-
+  function setFrame(i) {
+  
+    frameIdx = Math.max(
+      0,
+      Math.min(frameCount() - 1, i)
+    );
+  
+    document.getElementById("frame-slider").max =
+      frameCount(aktiverSee) - 1;
+  
+    document.getElementById("frame-slider").value =
+      frameIdx;
+  
+    document.getElementById("frame-date-label").textContent =
+      DATES[frameIdx];
+  
+    document.getElementById("title-date").textContent =
+      DATES[frameIdx];
+  
+    const img  = document.getElementById("frame-display");
+    const load = document.getElementById("frame-loading");
+    const err  = document.getElementById("frame-error");
+  
+    const key = `${aktiverSee}_${aktiveMethode}`;
+    const frames = frameCache.get(key);
+  
+    // ── Frame aus Cache verwenden ──
+    if (frames && frames[frameIdx] && frames[frameIdx].complete) {
+  
+      img.src = frames[frameIdx].src;
+  
+      load.style.display = "none";
+      err.style.display = "none";
+      img.style.display = "block";
+  
+      return;
+    }
+  
+    // ── Falls noch nicht geladen ──
+    img.style.display = "none";
+    err.style.display = "none";
+    load.style.display = "block";
+  
+    const pfad = framePfad(
+      aktiverSee,
+      aktiveMethode,
+      frameIdx
+    );
+  
+    img.src = pfad;
+  
+    img.onload = () => {
+      load.style.display = "none";
+      img.style.display = "block";
+    };
+  
+    img.onerror = () => {
+      load.style.display = "none";
+      err.style.display = "block";
+  
+      document.getElementById("frame-errpfad").textContent =
+        pfad;
+    };
+  }
   // ── Tabs (reine PNG-Anzeige) ─────────────────────────────────────
 function fuelleOtsu() {
   const grid = document.getElementById("otsu-grid");
