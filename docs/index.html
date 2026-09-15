@@ -389,11 +389,6 @@
   function spearman2(x,y){ return pearson2(rank(x),rank(y)); }
 
   function zeichneHauptAus(rows, methode) {
-    plugins: {
-      title: { display: true, text: "Zeitreihen: Pegelstand vs. Wasserfläche",
-                font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
-      legend: { position: "top" },
-    },
     const col = SPALTE[methode], farbe = TFARBE[methode];
     const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
                        .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
@@ -411,7 +406,11 @@
           borderColor:farbe, backgroundColor:farbe, pointRadius:0, borderWidth:2, borderDash:[6,4], tension:.2 },
       ]},
       options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
-        plugins:{ legend:{position:"top"} },
+        plugins:{          
+          title: { display: true, text: "Zeitreihen: Pegelstand vs. Wasserfläche",
+                  font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
+          legend: { position: "top" },
+                },
         scales:{
           yPegel:{ position:"left",  title:{display:true, text:achse, color:"#1a3a5c"}, ticks:{color:"#1a3a5c"} },
           yArea:{  position:"right", title:{display:true, text:"Wasserfläche [km²]", color:farbe}, ticks:{color:farbe}, grid:{display:false} },
@@ -432,13 +431,6 @@
   };
   
   function zeichneAbweichungAus(rows, methode) {
-    plugins: {
-      title: { display: true, text: "Relative Flächenabweichung ΔA/A durch Randpixel [%]",
-                font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
-      legend: { position: "top" },
-      tooltip: { /* dein bestehender tooltip-Block bleibt */ }
-    },
-  
     const areaCol  = SPALTE[methode];
     const deltaCol = DELTA_SPALTE[methode];
     const farbe   = TFARBE[methode];
@@ -517,6 +509,8 @@
           intersect: false
         },
         plugins: {
+          title: { display: true, text: "Relative Flächenabweichung ΔA/A durch Randpixel [%]",
+                   font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
           legend: {
             position: "top"
           },
