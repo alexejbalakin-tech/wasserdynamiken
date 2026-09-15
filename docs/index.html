@@ -372,29 +372,6 @@
     const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
                        .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
                        .sort((a,b)=>a.m<b.m?-1:1);
-    const kz = document.getElementById("val-kz");
-    if (merged.length < 3) { kz.textContent="Zu wenige Monate mit Pegel + Fläche."; if(hauptChart){hauptChart.destroy();hauptChart=null;} return; }
-    const labels=merged.map(r=>r.m), peg=merged.map(r=>r.peg), area=merged.map(r=>r.area);
-    const pr=pearson2(peg,area), sr=spearman2(peg,area);
-    kz.textContent = `Pearson r = ${pr.toFixed(3)} · Spearman r = ${sr.toFixed(3)} · n = ${merged.length} Monate`;
-    const pegN=normArr(peg), satN=normArr(area);
-    if (hauptChart) hauptChart.destroy();
-    hauptChart = new Chart(document.getElementById("val-chart"), {
-      type:"line",
-      data:{ labels, datasets:[
-        { label:"Pegelstand (normiert)", data:pegN, borderColor:"#1a3a5c", backgroundColor:"#1a3a5c", pointRadius:0, borderWidth:2, tension:.2 },
-        { label:`Satellit ${methode} (normiert)`, data:satN, borderColor:farbe, backgroundColor:farbe, pointRadius:0, borderWidth:2, borderDash:[6,4], tension:.2 },
-      ]},
-      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
-        plugins:{legend:{position:"top"}},
-        scales:{ y:{min:0,max:1,title:{display:true,text:"Normierter Wert [0–1]"}}, x:{ticks:{maxTicksLimit:12}} } }
-    });
-  }
-  function zeichneHauptAus(rows, methode) {
-    const col = SPALTE[methode], farbe = TFARBE[methode];
-    const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
-                       .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
-                       .sort((a,b)=>a.m<b.m?-1:1);
     if (merged.length < 2) { if (hauptChart){hauptChart.destroy();hauptChart=null;} return; }
     const labels = merged.map(r=>r.m), peg = merged.map(r=>r.peg), area = merged.map(r=>r.area);
     const achse = PEGEL_ACHSE[aktiverSee] || "Wasserstand [m]";
