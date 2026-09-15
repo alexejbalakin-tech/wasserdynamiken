@@ -219,10 +219,23 @@
     <div class="card-body">
 
       <!-- DIAGRAMME: interaktiv (Pegel vs. Satellit, normiert) -->
-      <div class="view-panel active" id="view-diagramme">
-        <div style="position:relative;height:360px;"><canvas id="val-chart"></canvas></div>
-        <div class="pfad" id="val-status"></div>
-      </div>
+  <div class="view-panel active" id="view-diagramme">
+
+  <!-- 1. Diagramm: Pegel vs. Wasserfläche -->
+    <div style="position:relative;height:360px;">
+      <canvas id="val-chart"></canvas>
+    </div>
+
+    <div class="pfad" id="val-status"></div>
+
+  <!-- 2. Diagramm: Relative Flächenabweichung -->
+    <div style="position:relative;height:320px;margin-top:35px;">
+      <canvas id="abw-chart"></canvas>
+    </div>
+
+    <div class="pfad" id="abw-status"></div>
+
+  </div>
 
       <!-- TREND: Trend-PNG -->
       <!-- TREND: interaktiv aus der CSV (Chart.js) -->
@@ -391,13 +404,198 @@
         } }
     });
   }
+  // ── 2. DIAGRAMM: Relative Flächenabweichung ΔA/A ────────────────
+  let abwChart = null;
+  
+  // Name der Δ-Spalte je Methode
+  const DELTA_SPALTE = {
+    M1: "M1_Delta_km2",
+    M2: "M2_Delta_km2",
+    M3: "M3_Delta_km2",
+    M4: "M4_Delta_km2",
+    M5: "M5_Delta_km2"
+  };
+  
+  function zeichneAbweichungAus(rows, methode) {
+  
+    const areaCol  = SPALTE[methode];
+    const deltaCol = DELTA_SPALTE[methode];
+    const farbe   = TFARBE[methode];
+  
+    const merged = rows
+      .map(r => ({
+        m: (r.datum || "").slice(0, 7),
+        area: parseFloat(r[areaCol]),
+        delta: parseFloat(r[deltaCol])
+      }))
+      .filter(r =>
+        r.m &&
+        !isNaN(r.area) &&
+        !isNaN(r.delta) &&
+        r.area > 0
+      )
+      .sort((a, b) => a.m < b.m ? -1 : 1);
+  
+    const status = document.getElementById("abw-status");
+  
+    if (merged.length < 2) {
+  
+      if (abwChart) {
+        abwChart.destroy();
+        abwChart = null;
+      }
+  
+      status.textContent =
+        `Keine Δ-Spalte verfügbar (erwartet: '${deltaCol}').`;
+  
+      return;
+    }
+  
+    // ΔA/A [%]
+    const abw = merged.map(r =>
+      Math.min(50, Math.max(0, r.delta / r.area * 100))
+    );
+  
+    // Mittelwert
+    const mittel =
+      abw.reduce((sum, value) => sum + value, 0) / abw.length;
+  
+    const labels = merged.map(r => r.m);
+  
+    if (abwChart) {
+      abwChart.destroy();
+    }
+  
+    abwChart = new Chart(document.getElementById("abw-chart"), {
+  
+      type: "line",
+  
+      data: {
+        labels: labels,
+  
+        datasets: [
+  
+          // ΔA/A
+          {
+            label: "ΔA / A [%]",
+            data: abw,
+            borderColor: farbe,
+            backgroundColor: farbe + "40",
+            fill: true,
+            pointRadius: 0,
+            borderWidth: 1.5,
+            tension: 0.2
+          },
+  
+          // Mittelwert
+          {
+            label: `Mittel: ${mittel.toFixed(1)} %`,
+            data: labels.map(() => mittel),
+            borderColor: "#e74c3c",
+            backgroundColor: "#e74c3c",
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false
+          }
+  
+        ]
+      },
+  
+      options: {
+  
+        responsive: true,
+        maintainAspectRatio: false,
+  
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+  
+        plugins: {
+          legend: {
+            position: "top"
+          },
+  
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return `${context.dataset.label}: ${
+                  context.parsed.y.toFixed(2)
+                } %`;
+              }
+            }
+          }
+        },
+  
+        scales: {
+  
+          x: {
+            ticks: {
+              maxTicksLimit: 12
+            },
+  
+            title: {
+              display: true,
+              text: "Datum"
+            }
+          },
+  
+          y: {
+            beginAtZero: true,
+  
+            title: {
+              display: true,
+              text: "ΔA / A [%]"
+            }
+          }
+  
+        }
+  
+      }
+  
+    });
+
+  status.textContent =
+    `${deltaCol} · Mittelwert: ${mittel.toFixed(2)} %`;
+  }
   function zeichneHaupt(see, methode) {
+  
     const status = document.getElementById("val-status");
-    if (csvCache[see]) { status.textContent=""; zeichneHauptAus(csvCache[see], methode); return; }
+  
+    if (csvCache[see]) {
+  
+      status.textContent = "";
+  
+      zeichneHauptAus(csvCache[see], methode);
+      zeichneAbweichungAus(csvCache[see], methode);
+  
+      return;
+    }
+  
     status.textContent = "Lade " + csvPfad(see) + " …";
-    fetch(csvPfad(see)).then(r=>{if(!r.ok)throw new Error(r.status);return r.text();})
-      .then(t=>{ csvCache[see]=parseCSV(t); status.textContent=""; zeichneHauptAus(csvCache[see], methode); })
-      .catch(e=>{ status.textContent="CSV konnte nicht geladen werden ("+e+")."; });
+  
+    fetch(csvPfad(see))
+      .then(r => {
+        if (!r.ok) throw new Error(r.status);
+        return r.text();
+      })
+      .then(t => {
+  
+        csvCache[see] = parseCSV(t);
+  
+        status.textContent = "";
+  
+        zeichneHauptAus(csvCache[see], methode);
+        zeichneAbweichungAus(csvCache[see], methode);
+  
+      })
+      .catch(e => {
+  
+        status.textContent =
+          "CSV konnte nicht geladen werden (" + e + ").";
+  
+      });
   }
 
   // ══════════════════════════════════════════════════════════════
