@@ -236,8 +236,6 @@
     <div class="pfad" id="abw-status"></div>
 
   </div>
-
-      <!-- TREND: Trend-PNG -->
       <!-- TREND: interaktiv aus der CSV (Chart.js) -->
       <div class="view-panel" id="view-trend">
         <div id="trend-kz" style="color:#1a3a5c;font-weight:700;margin-bottom:10px;">–</div>
@@ -260,8 +258,11 @@
       <!-- DOWNLOAD -->
       <div class="view-panel" id="view-download">
         <div class="dl-row">
-          <a class="dl-btn" id="dl-png" download>⬇ Validierungsdiagramm (PNG)</a>
-          <a class="dl-btn sekundaer" id="dl-csv" download>⬇ Monatsdaten (CSV)</a>
+        <button class="dl-btn" onclick="ladeDiagrammHerunter(hauptChart, `Diagramm_${aktiverSee}_${aktiveMethode}`)">⬇ Pegel/Fläche als PNG</button>
+        <button class="dl-btn sekundaer" onclick="ladeDiagrammHerunter(abwChart, `Flaechenabweichung_${aktiverSee}_${aktiveMethode}`)">⬇ ΔA/A als PNG</button>
+        </div>
+        <div style="margin-top:12px;">
+        <button class="dl-btn" onclick="ladeDiagrammHerunter(trendChart, `Trend_${aktiverSee}_${aktiveMethode}`)">⬇ Trend als PNG</button>
         </div>
       </div>
 
@@ -309,6 +310,15 @@
   { src: "Daten/OTSU/OTSU_Chiemsee_S1_2019-01.png",         cap: "Fehlende Daten – K0 Jan 2019 (Chiemsee)" },
 
   ];
+
+    // Lädt ein Chart.js-Diagramm als PNG herunter.
+  function ladeDiagrammHerunter(chart, name) {
+    if (!chart) return;                              // noch nichts gezeichnet
+    const a = document.createElement("a");
+    a.href = chart.toBase64Image("image/png", 1);    // 1 = volle Qualität
+    a.download = name + ".png";
+    a.click();
+  }
 
     // ── TREND aus CSV (Chart.js) ─────────────────────────────────────
   const SPALTE = { M1:"M1_S1_K0_km2", M2:"M2_S2_NDWI_km2", M3:"M3_AND_km2", M4:"M4_OR_km2", M5:"M5_WEIGHTED_km2" };
