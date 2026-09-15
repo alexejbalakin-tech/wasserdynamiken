@@ -521,8 +521,6 @@ function fuelleOtsu() {
     if (e.key === "ArrowLeft")  { stopPlay(); setFrame(frameIdx - 1); }
     if (e.key === "ArrowRight") { stopPlay(); setFrame(frameIdx + 1); }
     if (e.key === " ")          { e.preventDefault(); togglePlay(); }
-    if (v === "trend") zeichneTrend(aktiverSee, aktiveMethode);
-    if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
   });
 
   // Schatten unter der Sticky-Nav nur wenn sie klebt
