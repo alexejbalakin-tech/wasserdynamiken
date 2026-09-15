@@ -391,6 +391,14 @@
         } }
     });
   }
+  function zeichneHaupt(see, methode) {
+    const status = document.getElementById("val-status");
+    if (csvCache[see]) { status.textContent=""; zeichneHauptAus(csvCache[see], methode); return; }
+    status.textContent = "Lade " + csvPfad(see) + " …";
+    fetch(csvPfad(see)).then(r=>{if(!r.ok)throw new Error(r.status);return r.text();})
+      .then(t=>{ csvCache[see]=parseCSV(t); status.textContent=""; zeichneHauptAus(csvCache[see], methode); })
+      .catch(e=>{ status.textContent="CSV konnte nicht geladen werden ("+e+")."; });
+  }
 
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
