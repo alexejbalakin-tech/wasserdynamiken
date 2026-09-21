@@ -6,6 +6,9 @@
   <title>Wasserflächendynamiken – Sentinel Datacubes</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- GeoTIFF im Browser lesen + als Leaflet-Layer darstellen -->
+  <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet@4.1.2/dist/georaster-layer-for-leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,7 +48,8 @@
     /* ── KARTE (Leaflet) ── */
     .gif-wrapper { background: #0a1520; position: relative; padding: 8px; }
     #map { width: 100%; height: 520px; border-radius: 4px; position: relative; z-index: 0; }
-    .leaflet-image-layer { image-rendering: pixelated; }   /* Pixel scharf statt verschwommen */
+    .map-lade { display: none; position: absolute; top: 16px; right: 16px; z-index: 1000;
+      background: rgba(10,21,32,.8); color: #8ab4d4; font-size: .78rem; padding: 4px 10px; border-radius: 4px; }
     .frame-error { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       z-index: 1000; background: rgba(10,21,32,.88); color: #ccc; font-size: 0.85rem; text-align: center;
       padding: 16px 22px; border-radius: 6px; max-width: 90%; }
@@ -135,8 +139,9 @@
       </div>
       <div class="gif-wrapper">
         <div id="map"></div>
+        <div class="map-lade" id="map-lade">Lade GeoTIFF …</div>
         <div class="frame-error" id="frame-error">
-          Karte nicht gefunden:<br>
+          GeoTIFF nicht gefunden:<br>
           <span id="frame-errpfad" style="font-size:0.75rem; color:#999;"></span>
         </div>
       </div>
@@ -155,13 +160,6 @@
             <option value="100">10</option>
             <option value="50">20</option>
           </select>
-        </div>
-        <div id="preload-row" class="slider-row" style="display:none;">
-          <span class="speed-label">Lade:</span>
-          <div style="flex:1; height:5px; background:#1a3a5c; border-radius:3px; overflow:hidden;">
-            <div id="preload-bar" style="height:100%; background:#2e6da4; width:0%; transition:width 0.08s;"></div>
-          </div>
-          <span id="preload-text" class="speed-label">0 / 120</span>
         </div>
         <div class="slider-progress" id="slider-years"></div>
       </div>
@@ -282,10 +280,9 @@
     const y = 2016 + Math.floor(idx / 12), m = (idx % 12) + 1;
     return `${y}-${String(m).padStart(2, "0")}`;
   };
-  // Karten-Overlay:    Daten/Overlays/{See}/{M}/{YYYY-MM}.png
-  const framePfad  = (see, m, idx) => `${ROOT}/Overlays/${see}/${m}/${monatString(idx)}.png`;
-  // Lage des Overlays: Daten/Overlays/{See}/bounds.json
-  const boundsPfad = (see) => `${ROOT}/Overlays/${see}/bounds.json`;
+  // GeoTIFF:          Daten/GeoTIFF/{See}/GeoTIFF_{M}_v2/{See}_water_{YYYY-MM}.tif
+  const tifPfad    = (see, m, idx) =>
+    `${ROOT}/GeoTIFF/${see}/GeoTIFF_${m}_v2/${see}_water_${monatString(idx)}.tif`;
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
   const csvPfad    = (see) => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
   // Pegel-CSV:         Daten/Pegel/{See}_pegel.csv
@@ -486,39 +483,86 @@
   }
 
   // ══════════════════════════════════════════════════════════════
-  //  LEAFLET-KARTE
+  //  LEAFLET-KARTE + GEOTIFF
   // ══════════════════════════════════════════════════════════════
   const karte = L.map("map", { keyboard: false });        // Pfeiltasten bleiben für den Zeitregler
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19, attribution: "© OpenStreetMap-Mitwirkende"
   }).addTo(karte);
   L.control.scale({ imperial: false }).addTo(karte);
   karte.setView([51, 10], 6);
 
-  let overlay = null, overlayPfad = "";
-  const boundsCache = {};
+  const WASSER_FARBE = "#0064c8";     // Pixelwert 1
+  const LAND_FARBE   = null;          // Pixelwert 0; null = transparent, z. B. "#ffffff"
+  const DECKKRAFT    = 0.9;
+  const CACHE_MAX    = 36;            // so viele GeoTIFFs im Speicher halten
+  const VORLADEN     = 3;             // so viele folgende Monate im Hintergrund laden
 
-  function ladeBounds(see) {
-    if (boundsCache[see]) return Promise.resolve(boundsCache[see]);
-    return fetch(boundsPfad(see))
-      .then(r => { if (!r.ok) throw new Error(`${boundsPfad(see)} (${r.status})`); return r.json(); })
-      .then(b => (boundsCache[see] = b));
+  const tifCache = new Map();         // Pfad -> Promise<georaster>
+  let aktuellerLayer = null, wartenderLayer = null, anfrageNr = 0, laedt = false, gezoomterSee = null;
+
+  function ladeGeoraster(pfad) {
+    if (tifCache.has(pfad)) return tifCache.get(pfad);
+    const p = fetch(pfad)
+      .then(r => { if (!r.ok) throw new Error(`${pfad} (${r.status})`); return r.arrayBuffer(); })
+      .then(parseGeoraster);
+    tifCache.set(pfad, p);
+    p.catch(() => tifCache.delete(pfad));
+    while (tifCache.size > CACHE_MAX) tifCache.delete(tifCache.keys().next().value);  // älteste entfernen
+    return p;
   }
 
-  function zeigeOverlay(pfad, bounds) {
+  function zeigeGeoTIFF(see, m, idx) {
+    const pfad = tifPfad(see, m, idx);
     const err = document.getElementById("frame-error");
-    err.style.display = "none";
-    overlayPfad = pfad;
-    if (!overlay) {
-      overlay = L.imageOverlay(pfad, bounds, { opacity: 0.9, interactive: false }).addTo(karte);
-      overlay.on("error", () => {
+    const lade = document.getElementById("map-lade");
+    const nr = ++anfrageNr;
+    laedt = true;
+    lade.style.display = "block";
+    if (wartenderLayer) { karte.removeLayer(wartenderLayer); wartenderLayer = null; }
+
+    ladeGeoraster(pfad)
+      .then(georaster => {
+        if (nr !== anfrageNr) return;                    // inzwischen anderer Monat gewählt
+        err.style.display = "none";
+        const layer = new GeoRasterLayer({
+          georaster,
+          opacity: DECKKRAFT,
+          resolution: 256,
+          pixelValuesToColorFn: w => (w[0] === 1 ? WASSER_FARBE : (w[0] === 0 ? LAND_FARBE : null)),
+        });
+        wartenderLayer = layer;
+
+        // Alten Layer erst entfernen, wenn der neue gezeichnet ist (kein Flackern)
+        let fertig = false;
+        const abschliessen = () => {
+          if (fertig) return; fertig = true;
+          if (!karte.hasLayer(layer)) return;            // wurde schon verworfen
+          if (aktuellerLayer && aktuellerLayer !== layer) karte.removeLayer(aktuellerLayer);
+          aktuellerLayer = layer;
+          if (wartenderLayer === layer) wartenderLayer = null;
+          if (nr === anfrageNr) { laedt = false; lade.style.display = "none"; }
+        };
+        layer.once("load", abschliessen);
+        setTimeout(abschliessen, 3000);                  // Sicherheitsnetz
+        layer.addTo(karte);
+
+        if (gezoomterSee !== see) {                      // beim Seewechsel auf den See zoomen
+          gezoomterSee = see;
+          karte.invalidateSize();
+          karte.fitBounds(layer.getBounds(), { padding: [10, 10] });
+        }
+        for (let k = 1; k <= VORLADEN; k++)              // nächste Monate vorladen
+          ladeGeoraster(tifPfad(see, m, (idx + k) % N_MONATE)).catch(() => {});
+      })
+      .catch(e => {
+        if (nr !== anfrageNr) return;
+        laedt = false;
+        lade.style.display = "none";
         err.style.display = "block";
-        document.getElementById("frame-errpfad").textContent = overlayPfad;
+        document.getElementById("frame-errpfad").textContent = pfad;
+        console.warn(e);
       });
-    } else {
-      overlay.setBounds(L.latLngBounds(bounds));
-      overlay.setUrl(pfad);
-    }
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -530,34 +574,6 @@
   for (let y = 2016; y <= 2025; y++) for (let m = 0; m < 12; m++) DATES.push(`${MONATSNAMEN[m]} ${y}`);
 
   let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
-  const frameCache = new Map();
-
-  // Lädt alle Overlays eines Sees/einer Methode vorab (flüssige Animation)
-  function preloadFrames(see, m) {
-    const key = `${see}_${m}`;
-    if (frameCache.has(key)) return;
-    const row = document.getElementById("preload-row");
-    const bar = document.getElementById("preload-bar");
-    const text = document.getElementById("preload-text");
-    row.style.display = "flex"; bar.style.width = "0%"; text.textContent = `0 / ${N_MONATE}`;
-    const frames = new Array(N_MONATE);
-    frameCache.set(key, frames);
-    let loaded = 0;
-    const fertig = () => {
-      loaded++;
-      bar.style.width = `${loaded / N_MONATE * 100}%`;
-      text.textContent = `${loaded} / ${N_MONATE}`;
-      if (loaded === N_MONATE) row.style.display = "none";
-    };
-    for (let i = 0; i < N_MONATE; i++) {
-      const img = new Image();
-      frames[i] = img;
-      img.onload = fertig;
-      img.onerror = () => { console.warn("Overlay fehlt:", framePfad(see, m, i)); fertig(); };
-      img.src = framePfad(see, m, i);
-    }
-  }
-
   function setFrame(i) {
     frameIdx = Math.max(0, Math.min(N_MONATE - 1, i));
     const slider = document.getElementById("frame-slider");
@@ -565,9 +581,7 @@
     slider.value = frameIdx;
     document.getElementById("frame-date-label").textContent = DATES[frameIdx];
     document.getElementById("title-date").textContent = DATES[frameIdx];
-    const bounds = boundsCache[aktiverSee];
-    if (!bounds) return;                                  // Lage noch nicht geladen
-    zeigeOverlay(framePfad(aktiverSee, aktiveMethode, frameIdx), bounds);
+    zeigeGeoTIFF(aktiverSee, aktiveMethode, frameIdx);
   }
 
   function stopPlay() {
@@ -577,7 +591,8 @@
   function togglePlay() {
     if (playTimer) { stopPlay(); return; }
     const ms = parseInt(document.getElementById("speed-select").value);
-    playTimer = setInterval(() => setFrame((frameIdx + 1) % N_MONATE), ms);
+    // wartet, bis das aktuelle GeoTIFF gezeichnet ist
+    playTimer = setInterval(() => { if (!laedt) setFrame((frameIdx + 1) % N_MONATE); }, ms);
     document.getElementById("play-btn").textContent = "⏸";
   }
 
@@ -615,19 +630,7 @@
     document.querySelectorAll(".see-desc").forEach(d => d.classList.remove("active"));
     document.getElementById(`info-${aktiverSee}`).classList.add("active");
 
-    const see = aktiverSee;
-    ladeBounds(see)
-      .then(b => {
-        if (see !== aktiverSee) return;                   // inzwischen anderer See gewählt
-        if (seeGewechselt) { karte.invalidateSize(); karte.fitBounds(b, { padding: [10, 10] }); }
-        setFrame(idx);
-      })
-      .catch(e => {
-        document.getElementById("frame-error").style.display = "block";
-        document.getElementById("frame-errpfad").textContent = e.message;
-      });
-    setFrame(idx);                                        // Datum sofort aktualisieren
-    preloadFrames(aktiverSee, aktiveMethode);
+    setFrame(idx);
     refreshPanels();
   }
 
