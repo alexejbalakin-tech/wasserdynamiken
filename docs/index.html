@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wasserflächendynamiken – Sentinel Datacubes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,10 +41,14 @@
     .gif-title { padding: 14px 18px; font-size: 1rem; font-weight: 700; border-bottom: 1px solid #e8edf2; display: flex; align-items: center; gap: 10px; }
     .methode-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; color: #fff; background: #2e6da4; }
     .frame-date-badge { margin-left: auto; font-size: 0.9rem; font-weight: 600; color: #2e6da4; background: #e8f0fa; padding: 2px 10px; border-radius: 12px; }
-    .gif-wrapper { background: #0a1520; display: flex; align-items: center; justify-content: center; min-height: 380px; padding: 8px; position: relative; }
-    #frame-display { max-width: 100%; max-height: 520px; display: block; border-radius: 4px; }
-    #frame-loading { display: none; position: absolute; color: #5a8aaa; font-size: 0.85rem; }
-    .frame-error { color: #aaa; font-size: 0.85rem; text-align: center; padding: 30px; display: none; }
+
+    /* ── KARTE (Leaflet) ── */
+    .gif-wrapper { background: #0a1520; position: relative; padding: 8px; }
+    #map { width: 100%; height: 520px; border-radius: 4px; position: relative; z-index: 0; }
+    .leaflet-image-layer { image-rendering: pixelated; }   /* Pixel scharf statt verschwommen */
+    .frame-error { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 1000; background: rgba(10,21,32,.88); color: #ccc; font-size: 0.85rem; text-align: center;
+      padding: 16px 22px; border-radius: 6px; max-width: 90%; }
 
     .slider-panel { background: #0d1f30; padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
     .slider-row { display: flex; align-items: center; gap: 8px; }
@@ -63,28 +69,27 @@
     .methode-desc, .see-desc { display: none; } .methode-desc.active, .see-desc.active { display: block; }
 
     .view-panel { display: none; } .view-panel.active { display: block; }
-    .png-box { width: 100%; border-radius: 6px; border: 1px solid #e8edf2; display: block; }
-    .png-fallback { background: #0a1520; color: #5a8aaa; min-height: 260px; border-radius: 6px; display: none; align-items: center; justify-content: center; text-align: center; font-size: .85rem; padding: 20px; }
     .pfad { font-family: monospace; font-size: .72rem; color: #8a9aaa; margin-top: 8px; word-break: break-all; }
     .dl-row { display: flex; flex-wrap: wrap; gap: 12px; }
     .dl-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 8px; background: #2e6da4; color: #fff; font-weight: 600; font-size: .9rem; text-decoration: none; transition: background .15s; }
     .dl-btn:hover { background: #1a5a94; }
     .dl-btn.sekundaer { background: #fff; color: #2e6da4; border: 2px solid #2e6da4; }
+    .otsu-intro { font-size: .9rem; line-height: 1.55; color: #3a4a5a; margin-bottom: 14px; }
     .otsu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
     .otsu-item { border: 1px solid #e8edf2; border-radius: 8px; overflow: hidden; }
     .otsu-item img { width: 100%; display: block; }
     .otsu-cap { padding: 8px 10px; font-size: .8rem; color: #3a4a5a; }
     .hinweis { color: #8a9aaa; font-size: .85rem; padding: 30px; text-align: center; }
 
-        /* ── ZOOM / LIGHTBOX ── */
+    /* ── ZOOM / LIGHTBOX (OTSU-Bilder) ── */
     .zoomable { cursor: zoom-in; }
-    .lb-overlay { position: fixed; inset: 0; background: rgba(6,12,20,.93); z-index: 1000;
+    .lb-overlay { position: fixed; inset: 0; background: rgba(6,12,20,.93); z-index: 2000;
       display: none; align-items: center; justify-content: center; cursor: zoom-out; overflow: hidden; }
     #lb-img { max-width: 94vw; max-height: 90vh; transform-origin: center center;
       cursor: grab; user-select: none; -webkit-user-drag: none; }
     #lb-img.grabbing { cursor: grabbing; }
     .lb-close { position: fixed; top: 12px; right: 20px; font-size: 2rem; line-height: 1;
-      background: none; border: none; color: #fff; cursor: pointer; z-index: 1001; }
+      background: none; border: none; color: #fff; cursor: pointer; z-index: 2001; }
     .lb-hint { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center;
       color: #8ab4d4; font-size: .8rem; pointer-events: none; }
 
@@ -105,7 +110,7 @@
     <div class="section-label">See auswählen</div>
     <div class="btn-group" id="see-buttons">
       <button class="btn-see active" data-see="Forggensee">Forggensee</button>
-      <button class="btn-see" data-see="Dümmer" data-frames="108">Dümmer</button>
+      <button class="btn-see" data-see="Dümmer">Dümmer</button>
       <button class="btn-see" data-see="Chiemsee">Chiemsee</button>
       <button class="btn-see" data-see="Groß_Glienicker_See">Groß Glienicker See</button>
     </div>
@@ -119,7 +124,7 @@
     </div>
   </div>
 
-  <!-- HAUPTBEREICH: Animation + Info -->
+  <!-- HAUPTBEREICH: Karte + Info -->
   <div class="main-grid">
 
     <div class="card">
@@ -129,11 +134,10 @@
         <span class="frame-date-badge" id="title-date">Jan 2016</span>
       </div>
       <div class="gif-wrapper">
-        <img id="frame-display" class="zoomable" src="" alt="Monatskarte">
-        <div id="frame-loading">Lade…</div>
+        <div id="map"></div>
         <div class="frame-error" id="frame-error">
-          Frame nicht gefunden:<br>
-          <span id="frame-errpfad" style="font-size:0.75rem; color:#888;"></span>
+          Karte nicht gefunden:<br>
+          <span id="frame-errpfad" style="font-size:0.75rem; color:#999;"></span>
         </div>
       </div>
       <div class="slider-panel">
@@ -159,11 +163,7 @@
           </div>
           <span id="preload-text" class="speed-label">0 / 120</span>
         </div>
-        <div class="slider-progress" id="slider-years">
-          <span>2016</span><span>2017</span><span>2018</span><span>2019</span>
-          <span>2020</span><span>2021</span><span>2022</span><span>2023</span>
-          <span>2024</span><span>2025</span>
-        </div>
+        <div class="slider-progress" id="slider-years"></div>
       </div>
     </div>
 
@@ -171,20 +171,22 @@
       <div class="info-section">
         <h3>Methode</h3>
         <div class="methode-desc active" id="desc-M1"><p><strong>M1 – S1 Otsu (SAR)</strong><br><br>
-          Adaptiver Otsu-Schwellenwert auf Sentinel-1 K0-Backscatter (dB). Wasser hat sehr niedrige
-          Rückstreuung durch Spiegelreflexion. Funktioniert wetterunabhängig, auch bei Wolken und Nacht.</p></div>
-        <div class="methode-desc" id="desc-M2"><p><strong>M2 – S2 NDWI Otsu (Optisch)</strong><br><br>
-          Adaptiver Otsu-Schwellenwert auf Sentinel-2 NDWI (Green−NIR)/(Green+NIR). Sehr präzise bei
-          wolkenfreien Aufnahmen, fällt aber bei Bewölkung aus.</p></div>
+          Otsu-Schwellenwert, monatlich neu bestimmt, auf dem Sentinel-1-Rückstreukoeffizienten K0 (dB).
+          Wasser hat durch Spiegelreflexion eine sehr niedrige Rückstreuung. Funktioniert unabhängig von
+          Wolken und Tageslicht.</p></div>
+        <div class="methode-desc" id="desc-M2"><p><strong>M2 – S2 NDWI Otsu (optisch)</strong><br><br>
+          Otsu-Schwellenwert, monatlich neu bestimmt, auf dem Sentinel-2-NDWI (Grün − NIR)/(Grün + NIR).
+          Hohe Trennschärfe bei wolkenfreien Aufnahmen, fällt bei Bewölkung jedoch aus.</p></div>
         <div class="methode-desc" id="desc-M3"><p><strong>M3 – AND-Fusion</strong><br><br>
           Beide Sensoren müssen Wasser zeigen. Konservative Methode mit wenig Falsch-Positiven, aber
-          erhöhter Unterschätzung. Nur gültig wenn beide Sensoren Daten liefern.</p></div>
+          erhöhter Unterschätzung. Nur gültig, wenn beide Sensoren Daten liefern.</p></div>
         <div class="methode-desc" id="desc-M4"><p><strong>M4 – OR-Fusion</strong><br><br>
-          Mindestens ein Sensor muss Wasser zeigen. Sensitive Methode, erfasst maximale Wasserfläche
+          Mindestens ein Sensor muss Wasser zeigen. Sensitive Methode, erfasst die maximale Wasserfläche,
           aber mit erhöhtem Risiko für Falsch-Positive.</p></div>
-        <div class="methode-desc" id="desc-M5"><p><strong>M5 – Weighted Fusion (empfohlen)</strong><br><br>
-          S2 hat Vorrang wenn wolkenfrei (≤50% NaN), sonst S1 als Fallback. Beste Balance aus optischer
-          Präzision und SAR-Zuverlässigkeit.</p></div>
+        <div class="methode-desc" id="desc-M5"><p><strong>M5 – adaptive Fusion (S2-priorisiert)</strong><br><br>
+          Sind mindestens 50 % der Seefläche durch gültige Sentinel-2-Pixel abgedeckt und ist der
+          NDWI-Schwellenwert plausibel, wird M2 verwendet; verbleibende Wolkenlücken werden pixelweise
+          mit M1 gefüllt. Andernfalls wird für den ganzen Monat M1 verwendet.</p></div>
       </div>
       <div class="info-section">
         <h3>See</h3>
@@ -193,7 +195,7 @@
           Winter für Hochwasserschutz teilweise abgelassen. Pegelmessung: Rosshaupten (GKD Bayern).</p></div>
         <div class="see-desc" id="info-Dümmer"><p><strong>Dümmer</strong> · Niedersachsen<br><br>
           Natürlicher Flachsee im Osnabrücker Land, ~13 km². Durchschnittliche Tiefe nur ~1,5 m, stark
-          abhängig von Niederschlag und Verdunstung.</p></div>
+          abhängig von Niederschlag und Verdunstung. Pegeldaten liegen bis 12/2024 vor.</p></div>
         <div class="see-desc" id="info-Chiemsee"><p><strong>Chiemsee</strong> · Bayern<br><br>
           Größter bayerischer See, ~80 km². Natürlicher See mit alpinem Einzugsgebiet. Pegelstand
           beeinflusst durch Schneeschmelze und Alpenabflüsse.</p></div>
@@ -205,7 +207,7 @@
 
   </div><!-- /main-grid -->
 
-  <!-- TABS: Diagramme / Trend / OTSU / Download (alles PNG) -->
+  <!-- TABS -->
   <div class="section-label" style="margin-top:20px;">Ansicht</div>
   <div class="btn-group" id="view-tabs">
     <button class="btn-view active" data-view="diagramme">Diagramme</button>
@@ -218,38 +220,30 @@
     <div class="card-head"><span id="view-titel"></span></div>
     <div class="card-body">
 
-      <!-- DIAGRAMME: interaktiv (Pegel vs. Satellit, normiert) -->
-  <div class="view-panel active" id="view-diagramme">
+      <!-- DIAGRAMME -->
+      <div class="view-panel active" id="view-diagramme">
+        <div style="position:relative;height:360px;"><canvas id="val-chart"></canvas></div>
+        <div class="pfad" id="val-status"></div>
+        <div style="position:relative;height:320px;margin-top:35px;"><canvas id="abw-chart"></canvas></div>
+        <div class="pfad" id="abw-status"></div>
+      </div>
 
-  <!-- 1. Diagramm: Pegel vs. Wasserfläche -->
-    <div style="position:relative;height:360px;">
-      <canvas id="val-chart"></canvas>
-    </div>
-
-    <div class="pfad" id="val-status"></div>
-
-  <!-- 2. Diagramm: Relative Flächenabweichung -->
-    <div style="position:relative;height:320px;margin-top:35px;">
-      <canvas id="abw-chart"></canvas>
-    </div>
-
-    <div class="pfad" id="abw-status"></div>
-
-  </div>
-      <!-- TREND: interaktiv aus der CSV (Chart.js) -->
+      <!-- TREND -->
       <div class="view-panel" id="view-trend">
         <div id="trend-kz" style="color:#1a3a5c;font-weight:700;margin-bottom:10px;">–</div>
         <div style="position:relative;height:360px;"><canvas id="trend-chart"></canvas></div>
         <div class="pfad" id="trend-status"></div>
       </div>
 
-      <!-- OTSU-METHODE: Bildraster auffälliger Monate -->
+      <!-- OTSU-METHODE -->
       <div class="view-panel" id="view-otsu">
         <p class="otsu-intro">
-          Die Otsu-Methode berechnet einen optimalen Schwellenwert, um Pixelwerte in zwei Klassen (Wasser und Land) zu unterteilen, 
-          indem sie die zwischenklassige Varianz maximiert. Bei der Anwendung der Otsu-Methode auf Sentinel-Daten sind in dieser Arbeit vier Schwierigkeiten aufgetreten: unimodale Verteilungen, überlappende 
-          Klassen (z.B. Eis und Land im Winter), fehlende Daten durch Wolkenbedeckung sowie Skaleneffekte bei kleinen Seen. Die folgenden Monate veranschaulichen 
-          diese Fälle beispielhaft.
+          Die Otsu-Methode berechnet einen optimalen Schwellenwert, um Pixelwerte in zwei Klassen (Wasser und Land)
+          zu unterteilen, indem sie die Varianz zwischen den Klassen maximiert. Bei der Anwendung auf Sentinel-Daten
+          sind in dieser Arbeit vier Schwierigkeiten aufgetreten: unimodale Verteilungen, überlappende Klassen
+          (z. B. Eis und Land im Winter), fehlende Daten durch Wolkenbedeckung sowie Skaleneffekte bei kleinen Seen.
+          Die folgenden Monate veranschaulichen diese Fälle beispielhaft.
+        </p>
         <div class="otsu-grid" id="otsu-grid"></div>
         <div class="hinweis" id="otsu-leer" style="display:none;">
           Für diesen See sind noch keine auffälligen Monate hinterlegt (siehe <code>OTSU_IMAGES</code> im Skript).</div>
@@ -259,8 +253,9 @@
       <div class="view-panel" id="view-download">
         <div class="dl-row">
           <a class="dl-btn sekundaer" id="dl-csv" download>⬇ Monatsdaten (CSV)</a>
+          <a class="dl-btn sekundaer" id="dl-pegel" download>⬇ Pegeldaten (CSV)</a>
         </div>
-      </div
+      </div>
 
     </div>
   </div>
@@ -274,52 +269,49 @@
   <div class="lb-hint">Mausrad: zoomen · ziehen: verschieben · Esc / Klick daneben: schließen</div>
 </div>
 
-<footer>Bachelorarbeit · Alexej Balakin · Sentinel Datacubes · OpenEO · CDSE</footer>
+<footer>Bachelorarbeit · Alexej Balakin · Sentinel Datacubes · openEO · CDSE · Kartengrundlage © OpenStreetMap-Mitwirkende</footer>
 
 <script>
   // ══════════════════════════════════════════════════════════════
-  //  PFADE  –  hier an deine Ordnerstruktur anpassen
+  //  PFADE
   // ══════════════════════════════════════════════════════════════
-  // ROOT wird den See-bezogenen Pfaden vorangestellt. Liegen die See-Ordner
-  // z.B. in einem Unterordner "openEO/", trage "openEO/" ein. Sonst "" lassen.
   const ROOT = "Daten";
 
-  const M_LABEL = { M1:"M1 S1-Otsu", M2:"M2 S2-NDWI", M3:"M3 AND", M4:"M4 OR", M5:"M5 Weighted" };
-  // Animation der Monatskarten (deine bestehende Struktur):
-  function framePfad(see, m, idx) {
-    return `${ROOT}/Frames/${see}_${M_LABEL[m].replace(/ /g,"_")}_${String(idx).padStart(4,"0")}.jpg`;
-  }
-  // Validierungs-PNG:  Daten/Validierung/Validierung_{See}_{Label mit _}.png
-  const valPngPfad   = (see, m) => `${ROOT}/Validierung/Validierung_${see}_${M_LABEL[m].replace(/ /g,"_")}.png`;
-  // Trend-PNG:         Daten/Trend/Trend_{See}_{M}.png
-  const trendPngPfad = (see, m) => `${ROOT}/Trend/Trend_${see}_${M_LABEL[m].replace(/ /g,"_")}.png`;
+  const N_MONATE = 120;                                   // Jan 2016 – Dez 2025
+  const monatString = (idx) => {
+    const y = 2016 + Math.floor(idx / 12), m = (idx % 12) + 1;
+    return `${y}-${String(m).padStart(2, "0")}`;
+  };
+  // Karten-Overlay:    Daten/Overlays/{See}/{M}/{YYYY-MM}.png
+  const framePfad  = (see, m, idx) => `${ROOT}/Overlays/${see}/${m}/${monatString(idx)}.png`;
+  // Lage des Overlays: Daten/Overlays/{See}/bounds.json
+  const boundsPfad = (see) => `${ROOT}/Overlays/${see}/bounds.json`;
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
-  const csvPfad      = (see)    => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
-  // OTSU – auffällige Monate je See selbst eintragen:
-  const OTSU_IMAGES  = [
-  { src: "Daten/OTSU/OTSU_Forggensee_S1_2017-02.png",       cap: "Überlappende Klassen – K0 Feb 2017 (Forggensee)" },
-  { src: "Daten/OTSU/OTSU_Forggensee_NDWI_2025-02.png",     cap: "Überlappende Klassen – NDWI Feb 2025 (Forggensee)" },
-  { src: "Daten/OTSU/OTSU_Dümmer_S1_2019-08.png",           cap: "Unimodale Verteilung – K0 Aug 2019 (Dümmer)" },
-  { src: "Daten/OTSU/OTSU_Dümmer_NDWI_2022-09.png",         cap: "Unimodale Verteilung – NDWI Sep 2022 (Dümmer)" },
-  { src: "Daten/OTSU/OTSU_Groß_Glienicker_See_NDWI_2016-11.png", cap: "Skaleneffekt – NDWI Nov 2016 (Groß Glienicker See)" },
-  { src: "Daten/OTSU/OTSU_Chiemsee_S1_2019-01.png",         cap: "Fehlende Daten – K0 Jan 2019 (Chiemsee)" },
+  const csvPfad    = (see) => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
+  // Pegel-CSV:         Daten/Pegel/{See}_pegel.csv
+  const pegelPfad  = (see) => `${ROOT}/Pegel/${see}_pegel.csv`;
 
+  // OTSU – auffällige Monate:
+  const OTSU_IMAGES = [
+    { src: "Daten/OTSU/OTSU_Forggensee_S1_2017-02.png",            cap: "Überlappende Klassen – K0 Feb 2017 (Forggensee)" },
+    { src: "Daten/OTSU/OTSU_Forggensee_NDWI_2025-02.png",          cap: "Überlappende Klassen – NDWI Feb 2025 (Forggensee)" },
+    { src: "Daten/OTSU/OTSU_Dümmer_S1_2019-08.png",                cap: "Unimodale Verteilung – K0 Aug 2019 (Dümmer)" },
+    { src: "Daten/OTSU/OTSU_Dümmer_NDWI_2022-09.png",              cap: "Unimodale Verteilung – NDWI Sep 2022 (Dümmer)" },
+    { src: "Daten/OTSU/OTSU_Groß_Glienicker_See_NDWI_2016-11.png", cap: "Skaleneffekt – NDWI Nov 2016 (Groß Glienicker See)" },
+    { src: "Daten/OTSU/OTSU_Chiemsee_S1_2019-01.png",              cap: "Fehlende Daten – K0 Jan 2019 (Chiemsee)" },
   ];
 
-    // Lädt ein Chart.js-Diagramm als PNG herunter.
-  function ladeDiagrammHerunter(chart, name) {
-    if (!chart) return;                              // noch nichts gezeichnet
-    const a = document.createElement("a");
-    a.href = chart.toBase64Image("image/png", 1);    // 1 = volle Qualität
-    a.download = name + ".png";
-    a.click();
-  }
-
-    // ── TREND aus CSV (Chart.js) ─────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  //  DATEN LADEN: Flächen-CSV + Pegel-CSV, Zuordnung über das Datum
+  // ══════════════════════════════════════════════════════════════
   const SPALTE = { M1:"M1_S1_K0_km2", M2:"M2_S2_NDWI_km2", M3:"M3_AND_km2", M4:"M4_OR_km2", M5:"M5_WEIGHTED_km2" };
+  const DELTA_SPALTE = { M1:"M1_delta_km2", M2:"M2_delta_km2", M3:"M3_delta_km2", M4:"M4_delta_km2", M5:"M5_delta_km2" };
   const TFARBE = { M1:"#2196F3", M2:"#FF9800", M3:"#4CAF50", M4:"#9C27B0", M5:"#F44336" };
-  const csvCache = {};
-  let trendChart = null;
+  const PEGEL_SPALTE = "Pegelstand";
+  const PEGEL_ACHSE = {
+    "Forggensee": "Pegelstand [m ü. NN]", "Chiemsee": "Pegelstand [m ü. NN]",
+    "Dümmer": "Wassertiefe [m]", "Groß_Glienicker_See": "Wassertiefe [m]",
+  };
 
   function parseCSV(text) {
     const lines = text.trim().split(/\r?\n/);
@@ -330,6 +322,124 @@
       return o;
     });
   }
+
+  const datenCache = {};
+  function holeCSV(pfad) {
+    return fetch(pfad)
+      .then(r => { if (!r.ok) throw new Error(`${pfad} (${r.status})`); return r.text(); })
+      .then(parseCSV);
+  }
+  function ladeDaten(see) {
+    if (datenCache[see]) return Promise.resolve(datenCache[see]);
+    return Promise.all([
+      holeCSV(csvPfad(see)),
+      holeCSV(pegelPfad(see)).catch(() => [])          // ohne Pegel: Trend funktioniert trotzdem
+    ]).then(([flaeche, pegel]) => {
+      const pegelNachMonat = new Map(pegel.map(p => [(p.datum || "").slice(0, 7), p[PEGEL_SPALTE]]));
+      flaeche.forEach(r => { r[PEGEL_SPALTE] = pegelNachMonat.get((r.datum || "").slice(0, 7)) ?? ""; });
+      datenCache[see] = flaeche;
+      return flaeche;
+    });
+  }
+
+  // ── Statistik ────────────────────────────────────────────────────
+  function pearson2(x, y) {
+    const n = x.length, mx = x.reduce((a,b)=>a+b,0)/n, my = y.reduce((a,b)=>a+b,0)/n;
+    let s = 0, dx = 0, dy = 0;
+    for (let i = 0; i < n; i++) { s += (x[i]-mx)*(y[i]-my); dx += (x[i]-mx)**2; dy += (y[i]-my)**2; }
+    return s / Math.sqrt(dx*dy);
+  }
+  function rank(a) {
+    const s = a.map((v,i)=>[v,i]).sort((p,q)=>p[0]-q[0]); const r = new Array(a.length);
+    for (let i = 0; i < s.length;) { let j = i; while (j < s.length-1 && s[j][0] === s[j+1][0]) j++;
+      const rr = (i+j)/2+1; for (let k = i; k <= j; k++) r[s[k][1]] = rr; i = j+1; }
+    return r;
+  }
+  function spearman2(x, y) { return pearson2(rank(x), rank(y)); }
+
+  // ── 1. DIAGRAMM: Pegel vs. Wasserfläche ─────────────────────────
+  let hauptChart = null;
+  function zeichneHauptAus(rows, methode) {
+    const col = SPALTE[methode], farbe = TFARBE[methode];
+    const status = document.getElementById("val-status");
+    const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
+                       .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
+                       .sort((a,b) => a.m < b.m ? -1 : 1);
+    if (merged.length < 3) {
+      if (hauptChart) { hauptChart.destroy(); hauptChart = null; }
+      status.textContent = "Keine gemeinsamen Monate von Pegel und Wasserfläche gefunden.";
+      return;
+    }
+    const labels = merged.map(r=>r.m), peg = merged.map(r=>r.peg), area = merged.map(r=>r.area);
+    const r = pearson2(area, peg), rs = spearman2(area, peg);
+    status.textContent = `Pearson r = ${r.toFixed(3)} · Spearman rs = ${rs.toFixed(3)} · n = ${peg.length} Monate ` +
+                         `(${labels[0]} bis ${labels[labels.length-1]})`;
+    const achse = PEGEL_ACHSE[aktiverSee] || "Wasserstand [m]";
+    if (hauptChart) hauptChart.destroy();
+    hauptChart = new Chart(document.getElementById("val-chart"), {
+      type: "line",
+      data: { labels, datasets: [
+        { label: achse, data: peg, yAxisID: "yPegel",
+          borderColor: "#1a3a5c", backgroundColor: "#1a3a5c", pointRadius: 0, borderWidth: 2, tension: .2 },
+        { label: `Wasserfläche ${methode} [km²]`, data: area, yAxisID: "yArea",
+          borderColor: farbe, backgroundColor: farbe, pointRadius: 0, borderWidth: 2, borderDash: [6,4], tension: .2 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: {
+          title: { display: true, text: "Zeitreihen: Pegelstand vs. Wasserfläche",
+                   font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
+          legend: { position: "top" },
+        },
+        scales: {
+          yPegel: { position: "left",  title: { display: true, text: achse, color: "#1a3a5c" }, ticks: { color: "#1a3a5c" } },
+          yArea:  { position: "right", title: { display: true, text: "Wasserfläche [km²]", color: farbe }, ticks: { color: farbe }, grid: { display: false } },
+          x: { ticks: { maxTicksLimit: 12 } },
+        } }
+    });
+  }
+
+  // ── 2. DIAGRAMM: Relative Flächenabweichung ΔA/A ────────────────
+  let abwChart = null;
+  function zeichneAbweichungAus(rows, methode) {
+    const areaCol = SPALTE[methode], deltaCol = DELTA_SPALTE[methode], farbe = TFARBE[methode];
+    const status = document.getElementById("abw-status");
+    const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[areaCol]), delta:parseFloat(r[deltaCol]) }))
+                       .filter(r => r.m && !isNaN(r.area) && !isNaN(r.delta) && r.area > 0)
+                       .sort((a,b) => a.m < b.m ? -1 : 1);
+    if (merged.length < 2) {
+      if (abwChart) { abwChart.destroy(); abwChart = null; }
+      status.textContent = `Keine Δ-Spalte verfügbar (erwartet: '${deltaCol}').`;
+      return;
+    }
+    const abw = merged.map(r => Math.min(50, Math.max(0, r.delta / r.area * 100)));
+    const mittel = abw.reduce((s,v) => s+v, 0) / abw.length;
+    const labels = merged.map(r => r.m);
+    if (abwChart) abwChart.destroy();
+    abwChart = new Chart(document.getElementById("abw-chart"), {
+      type: "line",
+      data: { labels, datasets: [
+        { label: "ΔA / A [%]", data: abw, borderColor: farbe, backgroundColor: farbe + "40",
+          fill: true, pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
+        { label: `Mittel: ${mittel.toFixed(1)} %`, data: labels.map(() => mittel), borderColor: "#e74c3c",
+          backgroundColor: "#e74c3c", borderWidth: 1.5, borderDash: [6,4], pointRadius: 0, fill: false },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: {
+          title: { display: true, text: "Relative Flächenabweichung ΔA/A durch Randpixel [%]",
+                   font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
+          legend: { position: "top" },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)} %` } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 12 }, title: { display: true, text: "Datum" } },
+          y: { beginAtZero: true, title: { display: true, text: "ΔA / A [%]" } },
+        } }
+    });
+    status.textContent = `${deltaCol} · Mittelwert: ${mittel.toFixed(2)} %`;
+  }
+
+  // ── TREND ────────────────────────────────────────────────────────
+  let trendChart = null;
   function linRegCsv(rows, col) {
     const pts = rows.filter(r => r.datum && r[col] !== "" && !isNaN(parseFloat(r[col])));
     if (pts.length < 3) return null;
@@ -343,391 +453,137 @@
   function zeichneTrendAus(rows, methode) {
     const reg = linRegCsv(rows, SPALTE[methode]);
     const kz = document.getElementById("trend-kz");
-    if (!reg) { kz.textContent = "Keine Daten für diese Methode."; if (trendChart){trendChart.destroy();trendChart=null;} return; }
+    if (!reg) { kz.textContent = "Keine Daten für diese Methode."; if (trendChart) { trendChart.destroy(); trendChart = null; } return; }
     kz.textContent = `Trend: ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/Jahr · n = ${reg.n} Monate`;
     const punkte = reg.x.map((xi,i) => ({ x: xi+2016, y: reg.y[i] }));
     const xMin = Math.min(...reg.x), xMax = Math.max(...reg.x);
-    const linie = [ {x:xMin+2016,y:reg.slope*xMin+reg.intercept}, {x:xMax+2016,y:reg.slope*xMax+reg.intercept} ];
+    const linie = [ { x:xMin+2016, y:reg.slope*xMin+reg.intercept }, { x:xMax+2016, y:reg.slope*xMax+reg.intercept } ];
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(document.getElementById("trend-chart"), {
       data: { datasets: [
-        { type:"scatter", label:`Wasserfläche ${methode} [km²]`, data:punkte, pointRadius:3, backgroundColor:TFARBE[methode]+"aa" },
-        { type:"line", label:`Trend ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/a`, data:linie, borderColor:"#e53935", borderWidth:2, pointRadius:0, tension:0 },
+        { type: "scatter", label: `Wasserfläche ${methode} [km²]`, data: punkte, pointRadius: 3, backgroundColor: TFARBE[methode]+"aa" },
+        { type: "line", label: `Trend ${reg.slope>=0?"+":""}${reg.slope.toFixed(4)} km²/a`, data: linie,
+          borderColor: "#e53935", borderWidth: 2, pointRadius: 0, tension: 0 },
       ]},
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"top"}},
-        scales:{ x:{type:"linear",title:{display:true,text:"Jahr"},ticks:{callback:v=>v.toFixed(0)}},
-                 y:{title:{display:true,text:"Wasserfläche [km²]"}} } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top" } },
+        scales: { x: { type: "linear", title: { display: true, text: "Jahr" }, ticks: { callback: v => v.toFixed(0) } },
+                  y: { title: { display: true, text: "Wasserfläche [km²]" } } } }
     });
+  }
+
+  function zeichneHaupt(see, methode) {
+    const status = document.getElementById("val-status");
+    status.textContent = "Lade Daten …";
+    ladeDaten(see)
+      .then(rows => { zeichneHauptAus(rows, methode); zeichneAbweichungAus(rows, methode); })
+      .catch(e => { status.textContent = "Daten konnten nicht geladen werden: " + e.message; });
   }
   function zeichneTrend(see, methode) {
     const status = document.getElementById("trend-status");
-    if (csvCache[see]) { zeichneTrendAus(csvCache[see], methode); return; }
-    status.textContent = "Lade " + csvPfad(see) + " …";
-    fetch(csvPfad(see))
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-      .then(text => { csvCache[see] = parseCSV(text); status.textContent = csvPfad(see); zeichneTrendAus(csvCache[see], methode); })
-      .catch(e => { status.textContent = "CSV konnte nicht geladen werden (" + e + ")."; });
+    ladeDaten(see)
+      .then(rows => { status.textContent = csvPfad(see); zeichneTrendAus(rows, methode); })
+      .catch(e => { status.textContent = "Daten konnten nicht geladen werden: " + e.message; });
   }
-    // ── HAUPTDIAGRAMM: Pegel vs. Satellit aus DERSELBEN CSV (Chart.js) ─
-  const PEGEL_SPALTE = "Pegelstand";   // <-- exakt wie die Spalte in deiner CSV heißt
-  const PEGEL_ACHSE = {
-    "Forggensee": "Pegelstand [m ü. NN]", "Chiemsee": "Pegelstand [m ü. NN]",
-    "Dümmer": "Wassertiefe [m]", "Groß_Glienicker_See": "Wassertiefe [m]",
-  };
-  let hauptChart = null;
 
-  function normArr(a){ const mn=Math.min(...a), mx=Math.max(...a); return a.map(v=>mx>mn?(v-mn)/(mx-mn):0); }
-  function pearson2(x,y){ const n=x.length,mx=x.reduce((a,b)=>a+b,0)/n,my=y.reduce((a,b)=>a+b,0)/n;
-    let s=0,dx=0,dy=0; for(let i=0;i<n;i++){s+=(x[i]-mx)*(y[i]-my);dx+=(x[i]-mx)**2;dy+=(y[i]-my)**2;} return s/Math.sqrt(dx*dy); }
-  function rank(a){ const s=a.map((v,i)=>[v,i]).sort((p,q)=>p[0]-q[0]); const r=new Array(a.length);
-    for(let i=0;i<s.length;){let j=i;while(j<s.length-1&&s[j][0]===s[j+1][0])j++;const rr=(i+j)/2+1;for(let k=i;k<=j;k++)r[s[k][1]]=rr;i=j+1;} return r; }
-  function spearman2(x,y){ return pearson2(rank(x),rank(y)); }
+  // ══════════════════════════════════════════════════════════════
+  //  LEAFLET-KARTE
+  // ══════════════════════════════════════════════════════════════
+  const karte = L.map("map", { keyboard: false });        // Pfeiltasten bleiben für den Zeitregler
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "© OpenStreetMap-Mitwirkende"
+  }).addTo(karte);
+  L.control.scale({ imperial: false }).addTo(karte);
+  karte.setView([51, 10], 6);
 
-  function zeichneHauptAus(rows, methode) {
-    const col = SPALTE[methode], farbe = TFARBE[methode];
-    const merged = rows.map(r => ({ m:(r.datum||"").slice(0,7), area:parseFloat(r[col]), peg:parseFloat(r[PEGEL_SPALTE]) }))
-                       .filter(r => r.m && !isNaN(r.area) && !isNaN(r.peg))
-                       .sort((a,b)=>a.m<b.m?-1:1);
-    if (merged.length < 2) { if (hauptChart){hauptChart.destroy();hauptChart=null;} return; }
-    const labels = merged.map(r=>r.m), peg = merged.map(r=>r.peg), area = merged.map(r=>r.area);
-    const achse = PEGEL_ACHSE[aktiverSee] || "Wasserstand [m]";
-    if (hauptChart) hauptChart.destroy();
-    hauptChart = new Chart(document.getElementById("val-chart"), {
-      type:"line",
-      data:{ labels, datasets:[
-        { label: achse, data: peg, yAxisID:"yPegel",
-          borderColor:"#1a3a5c", backgroundColor:"#1a3a5c", pointRadius:0, borderWidth:2, tension:.2 },
-        { label:`Wasserfläche ${methode} [km²]`, data: area, yAxisID:"yArea",
-          borderColor:farbe, backgroundColor:farbe, pointRadius:0, borderWidth:2, borderDash:[6,4], tension:.2 },
-      ]},
-      options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
-        plugins:{          
-          title: { display: true, text: "Zeitreihen: Pegelstand vs. Wasserfläche",
-                  font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
-          legend: { position: "top" },
-                },
-        scales:{
-          yPegel:{ position:"left",  title:{display:true, text:achse, color:"#1a3a5c"}, ticks:{color:"#1a3a5c"} },
-          yArea:{  position:"right", title:{display:true, text:"Wasserfläche [km²]", color:farbe}, ticks:{color:farbe}, grid:{display:false} },
-          x:{ ticks:{maxTicksLimit:12} },
-        } }
-    });
+  let overlay = null, overlayPfad = "";
+  const boundsCache = {};
+
+  function ladeBounds(see) {
+    if (boundsCache[see]) return Promise.resolve(boundsCache[see]);
+    return fetch(boundsPfad(see))
+      .then(r => { if (!r.ok) throw new Error(`${boundsPfad(see)} (${r.status})`); return r.json(); })
+      .then(b => (boundsCache[see] = b));
   }
-  // ── 2. DIAGRAMM: Relative Flächenabweichung ΔA/A ────────────────
-  let abwChart = null;
-  
-  // Name der Δ-Spalte je Methode
-  const DELTA_SPALTE = {
-    M1: "M1_delta_km2",
-    M2: "M2_delta_km2",
-    M3: "M3_delta_km2",
-    M4: "M4_delta_km2",
-    M5: "M5_delta_km2"
-  };
-  
-  function zeichneAbweichungAus(rows, methode) {
-    const areaCol  = SPALTE[methode];
-    const deltaCol = DELTA_SPALTE[methode];
-    const farbe   = TFARBE[methode];
-  
-    const merged = rows
-      .map(r => ({
-        m: (r.datum || "").slice(0, 7),
-        area: parseFloat(r[areaCol]),
-        delta: parseFloat(r[deltaCol])
-      }))
-      .filter(r =>
-        r.m &&
-        !isNaN(r.area) &&
-        !isNaN(r.delta) &&
-        r.area > 0
-      )
-      .sort((a, b) => a.m < b.m ? -1 : 1);
-  
-    const status = document.getElementById("abw-status");
-  
-    if (merged.length < 2) {
-      if (abwChart) {
-        abwChart.destroy();
-        abwChart = null;
-      }
-      status.textContent =
-        `Keine Δ-Spalte verfügbar (erwartet: '${deltaCol}').`;
-      return;
-    }
-  
-    // ΔA/A [%]
-    const abw = merged.map(r =>
-      Math.min(50, Math.max(0, r.delta / r.area * 100))
-    );
-    // Mittelwert
-    const mittel =
-      abw.reduce((sum, value) => sum + value, 0) / abw.length;
-    const labels = merged.map(r => r.m);
-    if (abwChart) {
-      abwChart.destroy();
-    }
-    abwChart = new Chart(document.getElementById("abw-chart"), {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [
-          // ΔA/A
-          {
-            label: "ΔA / A [%]",
-            data: abw,
-            borderColor: farbe,
-            backgroundColor: farbe + "40",
-            fill: true,
-            pointRadius: 0,
-            borderWidth: 1.5,
-            tension: 0.2
-          },
-          // Mittelwert
-          {
-            label: `Mittel: ${mittel.toFixed(1)} %`,
-            data: labels.map(() => mittel),
-            borderColor: "#e74c3c",
-            backgroundColor: "#e74c3c",
-            borderWidth: 1.5,
-            borderDash: [6, 4],
-            pointRadius: 0,
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-          mode: "index",
-          intersect: false
-        },
-        plugins: {
-          title: { display: true, text: "Relative Flächenabweichung ΔA/A durch Randpixel [%]",
-                   font: { size: 15, weight: "bold" }, color: "#1a3a5c", padding: { bottom: 12 } },
-          legend: {
-            position: "top"
-          },
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                return `${context.dataset.label}: ${
-                  context.parsed.y.toFixed(2)
-                } %`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            ticks: {
-              maxTicksLimit: 12
-            },
-            title: {
-              display: true,
-              text: "Datum"
-            }
-          },
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: "ΔA / A [%]"
-            }
-          }
-        }
-      }
-    });
-  status.textContent =
-    `${deltaCol} · Mittelwert: ${mittel.toFixed(2)} %`;
-  }
-  function zeichneHaupt(see, methode) {
-    const status = document.getElementById("val-status");
-    if (csvCache[see]) {
-      status.textContent = "";
-      zeichneHauptAus(csvCache[see], methode);
-      zeichneAbweichungAus(csvCache[see], methode);
-      return;
-    }
-    status.textContent = "Lade " + csvPfad(see) + " …"; 
-    fetch(csvPfad(see))
-      .then(r => {
-        if (!r.ok) throw new Error(r.status);
-        return r.text();
-      })
-      .then(t => {
-        csvCache[see] = parseCSV(t);
-        status.textContent = "";
-        zeichneHauptAus(csvCache[see], methode);
-        zeichneAbweichungAus(csvCache[see], methode);
-      })
-      .catch(e => {
-        status.textContent =
-          "CSV konnte nicht geladen werden (" + e + ").";
+
+  function zeigeOverlay(pfad, bounds) {
+    const err = document.getElementById("frame-error");
+    err.style.display = "none";
+    overlayPfad = pfad;
+    if (!overlay) {
+      overlay = L.imageOverlay(pfad, bounds, { opacity: 0.9, interactive: false }).addTo(karte);
+      overlay.on("error", () => {
+        err.style.display = "block";
+        document.getElementById("frame-errpfad").textContent = overlayPfad;
       });
+    } else {
+      overlay.setBounds(L.latLngBounds(bounds));
+      overlay.setUrl(pfad);
+    }
   }
+
+  // ══════════════════════════════════════════════════════════════
+  //  ANIMATION
   // ══════════════════════════════════════════════════════════════
   const SEE_LABEL = { "Forggensee":"Forggensee", "Dümmer":"Dümmer", "Chiemsee":"Chiemsee", "Groß_Glienicker_See":"Groß Glienicker See" };
   const MONATSNAMEN = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
   const DATES = [];
   for (let y = 2016; y <= 2025; y++) for (let m = 0; m < 12; m++) DATES.push(`${MONATSNAMEN[m]} ${y}`);
-  function frameCount() {
-    const b = document.querySelector(".btn-see.active");
-    return (b && parseInt(b.dataset.frames)) || 120;
-  }
+
   let aktiverSee = "Forggensee", aktiveMethode = "M1", aktiveView = "diagramme", frameIdx = 0, playTimer = null;
-// ── Animation ───────────────────────────────────────────────────
-  const frameCache = new Map(); 
-  /**
-   * Lädt alle Frames eines Sees/einer Methode und speichert
-   * die Image-Objekte im Cache.
-   */
+  const frameCache = new Map();
+
+  // Lädt alle Overlays eines Sees/einer Methode vorab (flüssige Animation)
   function preloadFrames(see, m) {
     const key = `${see}_${m}`;
-    // Bereits geladen/angefordert
-    if (frameCache.has(key)) {
-      return;
-    }
+    if (frameCache.has(key)) return;
     const row = document.getElementById("preload-row");
     const bar = document.getElementById("preload-bar");
-    const text = document.getElementById("preload-text"); 
-    const n = frameCount();
-    row.style.display = "flex";
-    bar.style.width = "0%";
-    text.textContent = `0 / ${n}`;
-    // Array für die echten Image-Objekte
-    const frames = new Array(n);
-    // Sofort in den Cache legen
+    const text = document.getElementById("preload-text");
+    row.style.display = "flex"; bar.style.width = "0%"; text.textContent = `0 / ${N_MONATE}`;
+    const frames = new Array(N_MONATE);
     frameCache.set(key, frames);
     let loaded = 0;
-    for (let i = 0; i < n; i++) {
+    const fertig = () => {
+      loaded++;
+      bar.style.width = `${loaded / N_MONATE * 100}%`;
+      text.textContent = `${loaded} / ${N_MONATE}`;
+      if (loaded === N_MONATE) row.style.display = "none";
+    };
+    for (let i = 0; i < N_MONATE; i++) {
       const img = new Image();
       frames[i] = img;
-      img.onload = () => {
-        loaded++;  
-        const progress = (loaded / n) * 100;  
-        bar.style.width = `${progress}%`;
-        text.textContent = `${loaded} / ${n}`;  
-        if (loaded === n) {
-          row.style.display = "none";
-        }
-      };  
-      img.onerror = () => {
-        loaded++;  
-        const progress = (loaded / n) * 100;
-        bar.style.width = `${progress}%`;
-        text.textContent = `${loaded} / ${n}`;
-        console.warn(
-          "Frame konnte nicht geladen werden:",
-          framePfad(see, m, i)
-        );
-        if (loaded === n) {
-          row.style.display = "none";
-        }
-      }; 
-      // Frame laden
+      img.onload = fertig;
+      img.onerror = () => { console.warn("Overlay fehlt:", framePfad(see, m, i)); fertig(); };
       img.src = framePfad(see, m, i);
     }
-  }  
-  /**
-   * Zeigt einen bestimmten Frame an.
-   */
-  function setFrame(i) {  
-    // Frame-Index begrenzen
-    frameIdx = Math.max(
-      0,
-      Math.min(frameCount() - 1, i)
-    );  
-    // Slider aktualisieren
-    const slider = document.getElementById("frame-slider"); 
-    slider.max = frameCount(aktiverSee) - 1;
-    slider.value = frameIdx; 
-    // Datum aktualisieren
-    document.getElementById("frame-date-label").textContent =
-      DATES[frameIdx];
-    document.getElementById("title-date").textContent =
-      DATES[frameIdx]; 
-    // Elemente
-    const img = document.getElementById("frame-display");
-    const load = document.getElementById("frame-loading");
-    const err = document.getElementById("frame-error");
-    img.style.display = "none";
-    err.style.display = "none";
-    load.style.display = "block"; 
-    // Cache holen
-    const key = `${aktiverSee}_${aktiveMethode}`;
-    const frames = frameCache.get(key); 
-    // ----------------------------------------------------------
-    // FALL 1: Frame ist bereits im Cache
-    // ----------------------------------------------------------
-    if (
-      frames &&
-      frames[frameIdx] &&
-      frames[frameIdx].complete &&
-      frames[frameIdx].naturalWidth > 0
-    ) {
-      img.src = frames[frameIdx].src;
-      load.style.display = "none";
-      img.style.display = "block";
-      return;
-    }  
-    // ----------------------------------------------------------
-    // FALL 2: Frame noch nicht fertig geladen
-    // ----------------------------------------------------------  
-    const pfad = framePfad(
-      aktiverSee,
-      aktiveMethode,
-      frameIdx
-    ); 
-    img.src = pfad;
-    img.onload = () => {
-      load.style.display = "none";
-      err.style.display = "none";
-      img.style.display = "block";
-    };
-    img.onerror = () => {
-      load.style.display = "none";
-      img.style.display = "none";
-      err.style.display = "block";
-      document.getElementById("frame-errpfad").textContent =
-        pfad;
-    };
-  } 
-  /**
-   * Animation stoppen.
-   */
-  function stopPlay() {
-    if (playTimer) {
-      clearInterval(playTimer);
-      playTimer = null;
-    }
-    const button = document.getElementById("play-btn"); 
-    if (button) {
-      button.textContent = "▶";
-    }
-  }  
-  /**
-   * Animation starten/stoppen.
-   */
-  function togglePlay() {
-    if (playTimer) {
-      // Animation läuft → stoppen
-      stopPlay(); 
-    } else { 
-      // Animation starten
-      const ms = parseInt(
-        document.getElementById("speed-select").value
-      );
-      playTimer = setInterval(() => { 
-        setFrame(
-          (frameIdx + 1) % frameCount()
-        );
-      }, ms); 
-      document.getElementById("play-btn").textContent = "⏸";
-    }
   }
-    // ── Tabs steuern ─────────────────────────────────────────────────
+
+  function setFrame(i) {
+    frameIdx = Math.max(0, Math.min(N_MONATE - 1, i));
+    const slider = document.getElementById("frame-slider");
+    slider.max = N_MONATE - 1;
+    slider.value = frameIdx;
+    document.getElementById("frame-date-label").textContent = DATES[frameIdx];
+    document.getElementById("title-date").textContent = DATES[frameIdx];
+    const bounds = boundsCache[aktiverSee];
+    if (!bounds) return;                                  // Lage noch nicht geladen
+    zeigeOverlay(framePfad(aktiverSee, aktiveMethode, frameIdx), bounds);
+  }
+
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    document.getElementById("play-btn").textContent = "▶";
+  }
+  function togglePlay() {
+    if (playTimer) { stopPlay(); return; }
+    const ms = parseInt(document.getElementById("speed-select").value);
+    playTimer = setInterval(() => setFrame((frameIdx + 1) % N_MONATE), ms);
+    document.getElementById("play-btn").textContent = "⏸";
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  TABS & AKTUALISIERUNG
+  // ══════════════════════════════════════════════════════════════
   function fuelleOtsu() {
     const grid = document.getElementById("otsu-grid");
     document.getElementById("otsu-leer").style.display = OTSU_IMAGES.length ? "none" : "block";
@@ -738,11 +594,8 @@
   function refreshPanels() {
     if (aktiveView === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
     if (aktiveView === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
-    const dlPng = document.getElementById("dl-png");
-    const dlCsv = document.getElementById("dl-csv");
-    if (dlPng) dlPng.href = valPngPfad(aktiverSee, aktiveMethode);
-    if (dlCsv) dlCsv.href = csvPfad(aktiverSee);
-    fuelleOtsu();
+    document.getElementById("dl-csv").href = csvPfad(aktiverSee);
+    document.getElementById("dl-pegel").href = pegelPfad(aktiverSee);
   }
   function setView(v) {
     aktiveView = v;
@@ -751,27 +604,33 @@
     if (v === "trend")     zeichneTrend(aktiverSee, aktiveMethode);
     if (v === "diagramme") zeichneHaupt(aktiverSee, aktiveMethode);
   }
-  // ── Seite aktualisieren (See/Methode gewechselt) ─────────────────
-  function update() {
-    stopPlay(); frameIdx = 0;
+
+  function update(seeGewechselt) {
+    stopPlay();
+    const idx = seeGewechselt ? 0 : frameIdx;           // bei Methodenwechsel Monat beibehalten
     document.getElementById("gif-title-text").textContent = SEE_LABEL[aktiverSee];
     document.getElementById("gif-badge").textContent = aktiveMethode;
     document.querySelectorAll(".methode-desc").forEach(d => d.classList.remove("active"));
     document.getElementById(`desc-${aktiveMethode}`).classList.add("active");
     document.querySelectorAll(".see-desc").forEach(d => d.classList.remove("active"));
     document.getElementById(`info-${aktiverSee}`).classList.add("active");
-    document.getElementById("frame-slider").max = frameCount(aktiverSee) - 1;
-    const jahre = Math.ceil(frameCount(aktiverSee) / 12);
-    const jahrLeiste = document.getElementById("slider-years")
-                    || document.querySelector(".slider-progress");
-    if (jahrLeiste) {
-      jahrLeiste.innerHTML =
-        Array.from({ length: jahre }, (_, k) => `<span>${2016 + k}</span>`).join("");
-    }
-    setFrame(0);
+
+    const see = aktiverSee;
+    ladeBounds(see)
+      .then(b => {
+        if (see !== aktiverSee) return;                   // inzwischen anderer See gewählt
+        if (seeGewechselt) { karte.invalidateSize(); karte.fitBounds(b, { padding: [10, 10] }); }
+        setFrame(idx);
+      })
+      .catch(e => {
+        document.getElementById("frame-error").style.display = "block";
+        document.getElementById("frame-errpfad").textContent = e.message;
+      });
+    setFrame(idx);                                        // Datum sofort aktualisieren
     preloadFrames(aktiverSee, aktiveMethode);
     refreshPanels();
   }
+
   // ── Events ───────────────────────────────────────────────────────
   document.getElementById("play-btn").addEventListener("click", togglePlay);
   document.getElementById("prev-btn").addEventListener("click", () => { stopPlay(); setFrame(frameIdx - 1); });
@@ -780,73 +639,61 @@
   document.getElementById("speed-select").addEventListener("change", () => { if (playTimer) { stopPlay(); togglePlay(); } });
   document.querySelectorAll(".btn-see").forEach(btn => btn.addEventListener("click", () => {
     document.querySelectorAll(".btn-see").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active"); aktiverSee = btn.dataset.see; update(); aktiveFrameCount = parseInt(btn.dataset.frames) || 120;
+    btn.classList.add("active"); aktiverSee = btn.dataset.see; update(true);
   }));
   document.querySelectorAll(".btn-methode").forEach(btn => btn.addEventListener("click", () => {
     document.querySelectorAll(".btn-methode").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active"); aktiveMethode = btn.dataset.m; update();
+    btn.classList.add("active"); aktiveMethode = btn.dataset.m; update(false);
   }));
   document.querySelectorAll(".btn-view").forEach(btn => btn.addEventListener("click", () => setView(btn.dataset.view)));
   document.addEventListener("keydown", e => {
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     if (e.key === "ArrowLeft")  { stopPlay(); setFrame(frameIdx - 1); }
     if (e.key === "ArrowRight") { stopPlay(); setFrame(frameIdx + 1); }
     if (e.key === " ")          { e.preventDefault(); togglePlay(); }
   });
 
-  // Schatten unter der Sticky-Nav nur wenn sie klebt
+  // Jahresleiste unter dem Regler
+  document.getElementById("slider-years").innerHTML =
+    Array.from({ length: N_MONATE / 12 }, (_, k) => `<span>${2016 + k}</span>`).join("");
+
+  // Schatten unter der Sticky-Nav nur, wenn sie klebt
   const nav = document.getElementById("sticky-nav");
   const sentinel = document.createElement("div");
   nav.parentNode.insertBefore(sentinel, nav);
   new IntersectionObserver(([e]) => nav.classList.toggle("stuck", !e.isIntersecting), { threshold: [1] }).observe(sentinel);
 
-    // ── ZOOM / LIGHTBOX ──────────────────────────────────────────────
+  // ── ZOOM / LIGHTBOX (OTSU-Bilder) ────────────────────────────────
   (function () {
-    const overlay = document.getElementById("lightbox");
-    const lbImg   = document.getElementById("lb-img");
+    const overlayLb = document.getElementById("lightbox");
+    const lbImg = document.getElementById("lb-img");
     let scale = 1, tx = 0, ty = 0, dragging = false, sx = 0, sy = 0;
-
     const apply = () => { lbImg.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
     const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
-    function open(src) { lbImg.src = src; reset(); overlay.style.display = "flex"; }
-    function close() { overlay.style.display = "none"; lbImg.src = ""; }
+    function open(src) { lbImg.src = src; reset(); overlayLb.style.display = "flex"; }
+    function close() { overlayLb.style.display = "none"; lbImg.src = ""; }
 
-    // Öffnen: Klick auf ein Bild mit Klasse "zoomable"
     document.addEventListener("click", (e) => {
       const t = e.target;
-      if (t && t.tagName === "IMG" && t.classList.contains("zoomable")
-          && t.src && t.style.display !== "none") {
-        open(t.src);
-      }
+      if (t && t.tagName === "IMG" && t.classList.contains("zoomable") && t.src) open(t.src);
     });
-
-    // Schließen
     document.getElementById("lb-close").addEventListener("click", close);
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && overlay.style.display === "flex") close();
-    });
-
-    // Mausrad = zoomen
-    overlay.addEventListener("wheel", (e) => {
-      if (overlay.style.display !== "flex") return;
+    overlayLb.addEventListener("click", (e) => { if (e.target === overlayLb) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && overlayLb.style.display === "flex") close(); });
+    overlayLb.addEventListener("wheel", (e) => {
+      if (overlayLb.style.display !== "flex") return;
       e.preventDefault();
       scale = Math.min(8, Math.max(1, scale * (e.deltaY < 0 ? 1.15 : 1/1.15)));
       if (scale === 1) { tx = 0; ty = 0; }
       apply();
     }, { passive: false });
-
-    // Ziehen = verschieben (nur wenn gezoomt)
     lbImg.addEventListener("mousedown", (e) => {
       if (scale === 1) return;
       dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
       lbImg.classList.add("grabbing"); e.preventDefault();
     });
-    window.addEventListener("mousemove", (e) => {
-      if (!dragging) return; tx = e.clientX - sx; ty = e.clientY - sy; apply();
-    });
+    window.addEventListener("mousemove", (e) => { if (!dragging) return; tx = e.clientX - sx; ty = e.clientY - sy; apply(); });
     window.addEventListener("mouseup", () => { dragging = false; lbImg.classList.remove("grabbing"); });
-
-    // Doppelklick = zwischen Vollbild und 2,5× umschalten
     lbImg.addEventListener("dblclick", (e) => {
       e.preventDefault();
       if (scale === 1) { scale = 2.5; } else { scale = 1; tx = 0; ty = 0; }
@@ -854,13 +701,8 @@
     });
   })();
 
-  // Startwert der Bildanzahl vom anfangs aktiven See-Button übernehmen
-  const startBtn = document.querySelector(".btn-see.active");
-  if (startBtn) aktiveFrameCount = parseInt(startBtn.dataset.frames) || 120;
-
-  update();
-
-
+  fuelleOtsu();
+  update(true);
 </script>
 </body>
 </html>
