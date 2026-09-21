@@ -280,9 +280,10 @@
     const y = 2016 + Math.floor(idx / 12), m = (idx % 12) + 1;
     return `${y}-${String(m).padStart(2, "0")}`;
   };
-  // GeoTIFF:          Daten/GeoTIFF/{See}/GeoTIFF_{M}_v2/{See}_water_{YYYY-MM}.tif
-  const tifPfad    = (see, m, idx) =>
-    `${ROOT}/${see}/${see}_${m}_${String(idx).padStart(4, "0")}.png`;
+  const pngPfad    = (see, m, idx) =>
+    `${ROOT}/PNG/${see}/GeoTIFF_${m}_v2/${see}_water_${monatString(idx)}.png`;
+  // Lage der PNGs:     Daten/PNG/{See}/bounds.json
+  const boundsPfad = (see) => `${ROOT}/PNG/${see}/bounds.json`;
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
   const csvPfad    = (see) => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
   // Pegel-CSV:         Daten/CSV/{See}_Pegelstand.csv
