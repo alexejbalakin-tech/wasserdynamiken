@@ -282,7 +282,7 @@
   };
   // GeoTIFF:          Daten/GeoTIFF/{See}/GeoTIFF_{M}_v2/{See}_water_{YYYY-MM}.tif
   const tifPfad    = (see, m, idx) =>
-    `${ROOT}/GeoTIFF/${see}/Frames/${see}_${m}_${String(idx).padStart(4, "0")}.png`;
+    `${ROOT}/Frames/${see}_${m}_${String(idx).padStart(4, "0")}.png`;
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
   const csvPfad    = (see) => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
   // Pegel-CSV:         Daten/CSV/{See}_Pegelstand.csv
