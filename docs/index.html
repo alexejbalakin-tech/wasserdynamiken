@@ -282,11 +282,11 @@
   };
   // GeoTIFF:          Daten/GeoTIFF/{See}/GeoTIFF_{M}_v2/{See}_water_{YYYY-MM}.tif
   const tifPfad    = (see, m, idx) =>
-    `${ROOT}/GeoTIFF/${see}/GeoTIFF_${m}_v2/${see}_water_${monatString(idx)}.tif`;
+    `${ROOT}/GeoTIFF/${see}/GeoTIFF_${m}_v2_farbig/${see}_water_${monatString(idx)}.tif`;
   // Monatsdaten-CSV:   Daten/CSV/{See}_methodenvergleich.csv
   const csvPfad    = (see) => `${ROOT}/CSV/${see}_methodenvergleich.csv`;
-  // Pegel-CSV:         Daten/Pegel/{See}_pegel.csv
-  const pegelPfad  = (see) => `${ROOT}/Pegel/${see}_pegel.csv`;
+  // Pegel-CSV:         Daten/CSV/{See}_Pegelstand.csv
+  const pegelPfad  = (see) => `${ROOT}/CSV/${see}_Pegelstand.csv`;
 
   // OTSU – auffällige Monate:
   const OTSU_IMAGES = [
@@ -310,14 +310,30 @@
     "Dümmer": "Wassertiefe [m]", "Groß_Glienicker_See": "Wassertiefe [m]",
   };
 
+  // Liest CSV mit ";" (Dezimalkomma) oder "," (Dezimalpunkt) als Trennzeichen
   function parseCSV(text) {
-    const lines = text.trim().split(/\r?\n/);
-    const head = lines[0].split(";").map(s => s.trim());
-    return lines.slice(1).map(l => {
-      const c = l.split(";"); const o = {};
-      head.forEach((h, i) => o[h] = (c[i] || "").trim().replace(",", "."));
+    const lines = text.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
+    const sep = lines[0].includes(";") ? ";" : ",";
+    const head = lines[0].split(sep).map(s => s.trim().replace(/^"|"$/g, ""));
+    return lines.slice(1).filter(l => l.trim()).map(l => {
+      const c = l.split(sep); const o = {};
+      head.forEach((h, i) => {
+        let v = (c[i] || "").trim().replace(/^"|"$/g, "");
+        if (sep === ";") v = v.replace(",", ".");
+        o[h] = v;
+      });
       return o;
     });
+  }
+
+  // Datum in "YYYY-MM" umwandeln (2016-01, 2016-01-15, 15.01.2016, 01.2016)
+  function monatAus(s) {
+    s = (s || "").trim();
+    let t;
+    if ((t = s.match(/^(\d{4})-(\d{1,2})/)))            return `${t[1]}-${t[2].padStart(2, "0")}`;
+    if ((t = s.match(/^\d{1,2}\.(\d{1,2})\.(\d{4})/)))   return `${t[2]}-${t[1].padStart(2, "0")}`;
+    if ((t = s.match(/^(\d{1,2})\.(\d{4})/)))            return `${t[2]}-${t[1].padStart(2, "0")}`;
+    return "";
   }
 
   const datenCache = {};
@@ -332,8 +348,20 @@
       holeCSV(csvPfad(see)),
       holeCSV(pegelPfad(see)).catch(() => [])          // ohne Pegel: Trend funktioniert trotzdem
     ]).then(([flaeche, pegel]) => {
-      const pegelNachMonat = new Map(pegel.map(p => [(p.datum || "").slice(0, 7), p[PEGEL_SPALTE]]));
-      flaeche.forEach(r => { r[PEGEL_SPALTE] = pegelNachMonat.get((r.datum || "").slice(0, 7)) ?? ""; });
+      // Spalten der Pegel-CSV: Datum = "datum"/"Datum"/"date" oder 1. Spalte,
+      // Wert = "Pegelstand" oder 2. Spalte
+      const spalten = pegel.length ? Object.keys(pegel[0]) : [];
+      const datumSp = spalten.find(k => ["datum", "date"].includes(k.toLowerCase())) || spalten[0];
+      const wertSp  = spalten.includes(PEGEL_SPALTE) ? PEGEL_SPALTE : spalten[1];
+      // Monatsmittel (funktioniert auch, wenn die Pegel-CSV Tageswerte enthält)
+      const summen = new Map();
+      pegel.forEach(p => {
+        const m = monatAus(p[datumSp]), v = parseFloat(p[wertSp]);
+        if (!m || isNaN(v)) return;
+        const s = summen.get(m) || [0, 0]; s[0] += v; s[1]++; summen.set(m, s);
+      });
+      const pegelNachMonat = new Map([...summen].map(([m, [sum, n]]) => [m, String(sum / n)]));
+      flaeche.forEach(r => { r[PEGEL_SPALTE] = pegelNachMonat.get(monatAus(r.datum)) ?? ""; });
       datenCache[see] = flaeche;
       return flaeche;
     });
